@@ -653,7 +653,14 @@ function viewTimeline() {
   });
   let start = addDays(min, -2), end = addDays(max, 5);
   let total = diffDays(parse(start), parse(end)) + 1;
-  if (total > 130) total = 130;
+  // 跨度上限：超过 130 天就只画到第 130 天，超出的任务单独提示（不要画到画布外）
+  const WINDOW_DAYS = 130;
+  let outOfRange = [];
+  if (total > WINDOW_DAYS) {
+    total = WINDOW_DAYS;
+    end = addDays(start, total - 1);
+    outOfRange = tasks.filter(t => (t.due_date || t.start_date) > end);
+  }
   const dayW = Math.max(18, Math.min(30, Math.floor(1100 / total)));
   const width = total * dayW;
   const sD = parse(start);
@@ -694,14 +701,21 @@ function viewTimeline() {
     }
     h += '</div>';
     const tIdx = diffDays(sD, parse(S.today));
-    h += '<div class="tl-today-line" style="left:' + (tIdx * dayW) + 'px"></div>';
+    if (tIdx >= 0 && tIdx <= total) {
+      h += '<div class="tl-today-line" style="left:' + (tIdx * dayW) + 'px"></div>';
+    }
     mine.forEach((t, i) => {
       const s = t.start_date || t.due_date, e = t.due_date || t.start_date;
       const off = Math.max(0, diffDays(sD, parse(s)));
       const len = Math.max(1, diffDays(parse(s), parse(e)) + 1);
       const st = STATUS[t.status];
-      h += '<div class="gbar' + (t.status === 'done' ? ' done' : '') + '" data-task="' + t.id + '" title="' + esc(t.title + ' · ' + fmt(s) + ' ~ ' + fmt(e) + ' · ' + t.progress + '%') + '" ' +
-        'style="left:' + (off * dayW + 1) + 'px;width:' + Math.max(dayW - 2, len * dayW - 2) + 'px;top:' + (8 + i * 26) + 'px;position:absolute;background:' + st.color + ';--prog:' + t.progress + '%">' +
+      const leftPx = off * dayW + 1;
+      if (leftPx >= width) return;                       // 完全在窗口外，不画
+      const full = len * dayW - 2;
+      const wPx = Math.max(8, Math.min(full, width - leftPx - 1));
+      const clipped = full > wPx + 1;
+      h += '<div class="gbar' + (t.status === 'done' ? ' done' : '') + (wPx < 52 ? ' tiny' : '') + (clipped ? ' clipped' : '') + '" data-task="' + t.id + '" title="' + esc(t.title + ' · ' + fmt(s) + ' ~ ' + fmt(e) + ' · ' + t.progress + '%') + '" ' +
+        'style="left:' + leftPx + 'px;width:' + wPx + 'px;top:' + (8 + i * 26) + 'px;position:absolute;background:' + st.color + ';--prog:' + t.progress + '%">' +
         '<span class="lbl">' + esc(t.title) + '</span></div>';
     });
     h += '</div></div>';
@@ -709,6 +723,10 @@ function viewTimeline() {
   h += '</div></div>';
   h += '<div class="tl-legend">' + ORDER.map(s => '<span><i style="background:' + STATUS[s].color + '"></i>' + STATUS[s].label + '</span>').join('') +
     '<span><i style="background:#4f46e5"></i>今天</span><span class="muted">条内浅色部分为已完成进度</span></div>';
+  if (outOfRange.length) {
+    h += '<div class="tl-note">时间线只画到 ' + fmt(end) + '，另有 ' + outOfRange.length + ' 项事务的截止日期在这之后（可能是日期填错）：' +
+      outOfRange.map(t => '<a data-task="' + t.id + '">' + esc(t.title) + '</a>' + '<span class="muted">（截止 ' + fmt(t.due_date) + '）</span>').join('、') + '</div>';
+  }
   return h;
 }
 
