@@ -81,6 +81,17 @@ function taskLogsHtml(tid) {
     }).join('') + '</div>';
 }
 function lastUpdate(id) { const a = taskUpdates(id).filter(u => u.kind !== 'system'); return a.length ? a[0] : null; }
+// 最近一次「有动作」：写进展 或 改字段（改进度/状态/日期也算在推进）
+function lastActivity(t) {
+  const n = lastUpdate(t.id);
+  const logs = (S.data.logs || []).filter(l => l.task_id === t.id && l.action !== 'create');
+  let at = n ? n.created_at : null;
+  if (logs.length) {
+    const l = logs.reduce((a, b) => (a.created_at > b.created_at ? a : b));
+    if (!at || l.created_at > at) at = l.created_at;
+  }
+  return at;
+}
 // 周期口径：上周五 ~ 本周四（取不晚于 d 的最近周五）
 function weekOf(s) { const d = parse(s); const off = (d.getDay() + 2) % 7; d.setDate(d.getDate() - off); return iso(d); }
 function dueLabel(t) {
@@ -366,9 +377,9 @@ function buildReminders() {
     const n = daysLeft(t);
     if (isOverdue(t)) { push('overdue', t, '已逾期 ' + (-n) + ' 天，进度 ' + t.progress + '%'); return; }
     if (t.status === 'blocked') { push('blocked', t, '阻塞中，需要外部条件解除'); return; }
-    const lu = lastUpdate(t.id);
-    if (t.status !== 'todo' && (!lu || diffDays(parse(lu.created_at.slice(0, 10)), todayD()) >= 4)) {
-      push('stalled', t, lu ? '已 ' + diffDays(parse(lu.created_at.slice(0, 10)), todayD()) + ' 天没有新进展' : '还没有进展记录');
+    const la = lastActivity(t);
+    if (t.status !== 'todo' && (!la || diffDays(parse(la.slice(0, 10)), todayD()) >= 4)) {
+      push('stalled', t, la ? '已 ' + diffDays(parse(la.slice(0, 10)), todayD()) + ' 天没有更新' : '一直没有写进展，也没改进度');
       return;
     }
     if (n !== null && n <= 2) { push('soon', t, n === 0 ? '今天到期' : '还有 ' + n + ' 天到期'); return; }
