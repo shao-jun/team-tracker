@@ -346,7 +346,7 @@ table.list .pbar .bar { flex: 1; }
 .tl-wrap { overflow: auto; max-height: calc(100vh - 210px); border-radius: var(--radius); }
 .tl { min-width: 900px; }
 .tl-head { display: flex; position: sticky; top: 0; z-index: 5; background: #fafbfd; border-bottom: 1px solid var(--line); }
-.tl-name-col { flex: 0 0 156px; padding: 9px 14px; font-size: 11.5px; color: var(--muted); font-weight: 600; border-right: 1px solid var(--line); position: sticky; left: 0; background: #fafbfd; z-index: 3; }
+.tl-name-col { flex: 0 0 156px; padding: 9px 14px; font-size: 11.5px; color: var(--muted); font-weight: 600; border-right: 1px solid var(--line); position: sticky; left: 0; background: #fafbfd; z-index: 8; }
 .tl-days { flex: 1; position: relative; }
 .tl-months { display: flex; border-bottom: 1px solid var(--line); }
 .tl-month { font-size: 11px; color: #4b5266; font-weight: 600; padding: 3px 8px; border-right: 1px solid var(--line); }
@@ -356,14 +356,14 @@ table.list .pbar .bar { flex: 1; }
 .tl-day.today { background: #eef0ff; color: var(--accent); font-weight: 700; }
 .tl-row { display: flex; border-bottom: 1px solid #f2f3f8; min-height: 40px; }
 .tl-row:hover { background: #fcfcfe; }
-.tl-row .who { flex: 0 0 156px; display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-right: 1px solid var(--line); font-size: 12px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 2; }
+.tl-row .who { flex: 0 0 156px; display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-right: 1px solid var(--line); font-size: 12px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 7; }
 .tl-row:hover .who { background: #fcfcfe; }
 .tl-lane { flex: 1; position: relative; padding: 5px 0; overflow: hidden; }
 .tl-grid { position: absolute; inset: 0; display: flex; pointer-events: none; }
 .tl-grid i { flex: 1; border-right: 1px solid #f4f5fa; }
 .tl-grid i.weekend { background: #f8f9fc; }
 .tl-grid i.today { background: #eef0ff; }
-.tl-today-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: .45; z-index: 3; pointer-events: none; }
+.tl-today-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: .45; z-index: 1; pointer-events: none; }
 .gbar {
   position: relative; z-index: 2; height: 20px; margin: 3px 0; border-radius: 6px;
   display: flex; align-items: center; padding: 0 7px; font-size: 10.5px; color: #fff;
