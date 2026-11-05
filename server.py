@@ -25,6 +25,9 @@ STATIC = os.path.join(BASE, "static")
 AVATAR_DIR = os.path.join(BASE, "avatars")
 PORT = int(os.environ.get("PORT", "8770"))
 
+CATEGORIES = ("需求", "任务", "其他")
+PRIO_CN = {"P0": "高", "P1": "中", "P2": "低"}
+
 STATUS_CN = {"todo": "待办", "doing": "进行中", "paused": "暂停", "review": "待验收", "blocked": "阻塞", "done": "已完成"}
 FIELD_CN = {
     "title": "标题", "detail": "说明", "member_id": "负责人", "status": "状态",
@@ -525,6 +528,9 @@ def task_payload(data, existing=None):
             out[f] = v
     if "status" in out and out["status"] not in STATUS_CN:
         raise ValueError("非法状态")
+    if "category" in out:
+        cat = str(out["category"] or "").strip()
+        out["category"] = cat if cat in CATEGORIES else "其他"
     if "progress" in out and out["progress"] is not None:
         out["progress"] = max(0, min(100, out["progress"]))
     if out.get("status") == "done":
@@ -532,6 +538,22 @@ def task_payload(data, existing=None):
         out["done_at"] = now()
     elif existing and existing.get("status") == "done" and "status" in out:
         out["done_at"] = None
+    # 进度与状态联动：有进度就是进行中，100% 就是已完成，归零回未开始
+    if out.get("progress") is not None:
+        prog = out["progress"]
+        st = out.get("status") or (existing or {}).get("status") or "todo"
+        if prog >= 100:
+            out["status"] = "done"
+            out["progress"] = 100
+            if st != "done":
+                out["done_at"] = now()
+        elif prog > 0 and st in ("todo", "done"):
+            out["status"] = "doing"
+            if st == "done":
+                out["done_at"] = None
+        elif prog == 0 and st == "done":
+            out["status"] = "todo"
+            out["done_at"] = None
     return out
 
 
@@ -627,7 +649,7 @@ def build_report(start_s, end_s):
     if upcoming:
         for t in upcoming:
             lines.append("- %s — %s · 截止 %s · 优先级 %s" % (
-                t["title"], mname.get(t["member_id"], "未指派"), fdate(t["due_date"]), t["priority"]))
+                t["title"], mname.get(t["member_id"], "未指派"), fdate(t["due_date"]), PRIO_CN.get(t["priority"], t["priority"])))
     else:
         lines.append("- 暂无排期事务")
     lines.append("")

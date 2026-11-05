@@ -12,6 +12,7 @@ const STATUS = {
 };
 const ORDER = ['todo', 'doing', 'paused', 'review', 'blocked', 'done'];
 const PRIO = { P0: '#ef4444', P1: '#f59e0b', P2: '#94a3b8' };
+const PRIO_LABEL = { P0: '高', P1: '中', P2: '低' };
 
 const VIEWS = [
   { id: 'dashboard', label: '总览',   icon: '◎', title: '总览',       sub: '团队今天该关注什么' },
@@ -595,7 +596,7 @@ function viewKanban() {
       const lu = lastUpdate(t.id);
       h += '<div class="kcard" draggable="true" data-task="' + t.id + '">' +
         '<div class="ttl">' + esc(t.title) + '</div>' +
-        '<div class="tags"><span class="chip ' + t.priority.toLowerCase() + '">' + t.priority + '</span>' +
+        '<div class="tags"><span class="chip ' + t.priority.toLowerCase() + '">' + (PRIO_LABEL[t.priority] || t.priority) + '</span>' +
         '<span class="chip cat">' + esc(t.category) + '</span>' +
         '</div>' +
         (t.progress > 0 && t.progress < 100 ? '<div class="mini"><i style="width:' + t.progress + '%;background:' + meta.color + '"></i></div>' : '') +
@@ -640,7 +641,7 @@ function viewPlan() {
       '<td><div class="t">' + esc(t.title) + '</div><div class="muted" style="font-size:11px">' + esc(t.category) + (t.detail ? ' · ' + esc(t.detail.slice(0, 42)) : '') + '</div></td>' +
       '<td><div class="owner">' + avatar(m, 'sm') + esc(m ? m.name : '未指派') + '</div></td>' +
       '<td>' + chipStatus(t.status) + '</td>' +
-      '<td><span class="chip ' + t.priority.toLowerCase() + '">' + t.priority + '</span></td>' +
+      '<td><span class="chip ' + t.priority.toLowerCase() + '">' + (PRIO_LABEL[t.priority] || t.priority) + '</span></td>' +
       '<td><div class="pbar"><div class="bar"><i style="width:' + t.progress + '%;background:' + st.color + '"></i></div><span class="mono">' + t.progress + '%</span></div></td>' +
       '<td class="muted mono">' + fmt(t.start_date) + '</td>' +
       '<td class="mono">' + (t.due_date ?
@@ -1105,9 +1106,9 @@ function renderDrawer() {
       '</select></div>' +
     '<div class="form-row split"><label>状态</label><div class="two"><select id="f-status">' +
       ORDER.map(s => '<option value="' + s + '"' + (s === d.status ? ' selected' : '') + '>' + STATUS[s].label + '</option>').join('') + '</select>' +
-      '<select id="f-priority">' + Object.keys(PRIO).map(p => '<option value="' + p + '"' + (p === d.priority ? ' selected' : '') + '>' + p + '</option>').join('') + '</select></div></div>' +
+      '<select id="f-priority">' + Object.keys(PRIO).map(p => '<option value="' + p + '"' + (p === d.priority ? ' selected' : '') + '>' + PRIO_LABEL[p] + '</option>').join('') + '</select></div></div>' +
     '<div class="form-row"><label>类型</label><select id="f-category">' +
-      ['需求', '缺陷', '测试', '运维', '交付', '其他'].map(c => '<option value="' + c + '"' + (c === d.category ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
+      ['需求', '任务', '其他'].map(c => '<option value="' + c + '"' + (c === d.category ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
     '<div class="form-row"><label>开始</label><input type="date" id="f-start" value="' + esc(d.start_date || '') + '"></div>' +
     '<div class="form-row"><label>截止</label><input type="date" id="f-due" value="' + esc(d.due_date || '') + '"></div>' +
     '<div class="form-row"><label>进度</label><div style="display:flex;align-items:center;gap:10px"><input type="range" id="f-progress" min="0" max="100" step="5" value="' + d.progress + '" style="flex:1"><span class="mono" id="f-progress-v" style="width:38px;text-align:right;font-size:12.5px">' + d.progress + '%</span></div></div>' +
