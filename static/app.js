@@ -85,7 +85,8 @@ function lastUpdate(id) { const a = taskUpdates(id).filter(u => u.kind !== 'syst
 function lastActivity(t) {
   const n = lastUpdate(t.id);
   const logs = (S.data.logs || []).filter(l => l.task_id === t.id && l.action !== 'create');
-  let at = n ? n.created_at : null;
+  let at = t.created_at || null;                    // 刚建的事务本身就算「刚有动作」
+  if (n && (!at || n.created_at > at)) at = n.created_at;
   if (logs.length) {
     const l = logs.reduce((a, b) => (a.created_at > b.created_at ? a : b));
     if (!at || l.created_at > at) at = l.created_at;
