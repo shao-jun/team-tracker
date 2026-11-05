@@ -345,7 +345,7 @@ table.list .pbar .bar { flex: 1; }
 /* ---------------- timeline ---------------- */
 .tl-wrap { overflow: auto; max-height: calc(100vh - 210px); border-radius: var(--radius); }
 .tl { min-width: 900px; }
-.tl-head { display: flex; position: sticky; top: 0; z-index: 5; background: #fafbfd; border-bottom: 1px solid var(--line); }
+.tl-head { display: flex; position: sticky; top: 0; z-index: 12; background: #fafbfd; border-bottom: 1px solid var(--line); }
 .tl-name-col { flex: 0 0 156px; padding: 9px 14px; font-size: 11.5px; color: var(--muted); font-weight: 600; border-right: 1px solid var(--line); position: sticky; left: 0; background: #fafbfd; z-index: 8; }
 .tl-days { flex: 1; position: relative; }
 .tl-months { position: relative; height: 21px; border-bottom: 1px solid var(--line); }

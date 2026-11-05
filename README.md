@@ -5,11 +5,22 @@
 
 ## 启动
 
+推荐用 systemd 托管（开机自启、崩了自动拉起），单元文件在 `deploy/team-tracker.service`：
+
 ```bash
-./start.sh          # 启动并打开浏览器（默认 http://127.0.0.1:8770）
+sudo cp deploy/team-tracker.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now team-tracker
+
+systemctl status team-tracker     # 看状态
+sudo systemctl restart team-tracker
+sudo systemctl stop team-tracker
+journalctl -u team-tracker -f     # 日志（也追加到 ./server.log）
 ```
 
-手动启动：
+日常只想打开页面：`./start.sh`（检查服务、必要时重启、打开浏览器）。
+
+开发调试可以直接前台跑：
 
 ```bash
 python3 server.py            # 首次运行会写入一份示例数据
@@ -17,7 +28,7 @@ PORT=9000 python3 server.py  # 换端口
 python3 server.py --empty    # 空库启动（不写示例数据）
 ```
 
-停止：`pkill -f "python3 server.py"`（或前台运行时 Ctrl+C）
+停止：`sudo systemctl stop team-tracker`（前台调试时 Ctrl+C）
 
 ## 功能
 

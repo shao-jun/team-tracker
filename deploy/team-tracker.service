@@ -1,0 +1,21 @@
+[Unit]
+Description=Team Tracker (团队工作台) — local team board
+Documentation=file:///home/ut000190@uos/team-tracker/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ut000190
+Group=ut000190
+WorkingDirectory=/home/ut000190@uos/team-tracker
+Environment=PORT=8770
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/ut000190@uos/team-tracker/server.py
+Restart=always
+RestartSec=3
+StandardOutput=append:/home/ut000190@uos/team-tracker/server.log
+StandardError=append:/home/ut000190@uos/team-tracker/server.log
+
+[Install]
+WantedBy=multi-user.target
