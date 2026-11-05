@@ -828,23 +828,78 @@ class Handler(BaseHTTPRequestHandler):
         w_end = (datetime.strptime(week, "%Y-%m-%d").date() + timedelta(days=6)).isoformat()
         n_start = (datetime.strptime(week, "%Y-%m-%d").date() + timedelta(days=7)).isoformat()
         n_end = (datetime.strptime(week, "%Y-%m-%d").date() + timedelta(days=13)).isoformat()
-        tasks = rows(c.execute("SELECT * FROM tasks WHERE member_id=?", (mid,)))
-        c.close()
+        tasks = rows(c.execute("SELECT * FROM tasks WHERE member_id=? ORDER BY id", (mid,)))
+
+        def note(tid, limit=140):
+            r = rows(c.execute(
+                "SELECT content FROM updates WHERE task_id=? AND kind='note' ORDER BY id DESC LIMIT 1", (tid,)))
+            if not r:
+                return ""
+            txt = " / ".join(x.strip() for x in (r[0]["content"] or "").splitlines() if x.strip())
+            return txt[:limit] + ("…" if len(txt) > limit else "")
+
+        def line(t, tag=""):
+            bits = []
+            if t["due_date"]:
+                bits.append("截止 " + t["due_date"][5:])
+            if t["status"] != "done":
+                bits.append("进度 %d%%" % t["progress"])
+            head = "- " + (tag + " " if tag else "") + t["title"]
+            if bits:
+                head += "（" + " · ".join(bits) + "）"
+            n = note(t["id"])
+            return [head] + (["  进展：" + n] if n else [])
+
         done = [t for t in tasks if t["status"] == "done" and t["done_at"] and w_start <= t["done_at"][:10] <= w_end]
-        doing = [t for t in tasks if t["status"] in ("doing", "review", "blocked")]
-        nxt = [t for t in tasks if t["status"] != "done" and t["due_date"] and n_start <= t["due_date"] <= n_end]
-        over = [t for t in tasks if t["status"] != "done" and t["due_date"] and t["due_date"] < today()]
+        paused = [t for t in tasks if t["status"] == "paused"]
+        nxt = [t for t in tasks if t["status"] not in ("done", "paused", "blocked")
+               and t["due_date"] and n_start <= t["due_date"] <= n_end]
+        nxt.sort(key=lambda x: (x["due_date"] or "9999", x["id"]))
+        blocked = [t for t in tasks if t["status"] == "blocked"]
+        over = [t for t in tasks if t["status"] not in ("done", "paused", "blocked")
+                and t["due_date"] and t["due_date"] < today()]
+
         lines = ["【本周完成】"]
-        lines += ["- %s（%s）" % (t["title"], t["category"]) for t in done] or ["- 无"]
+        for t in done:
+            lines.append("- %s（%s）" % (t["title"], t["category"] or "事务"))
+            n = note(t["id"])
+            if n:
+                lines.append("  进展：" + n)
+        if not done:
+            lines.append("- 无")
+
         lines += ["", "【下周计划】"]
-        lines += ["- %s（截止 %s）" % (t["title"], t["due_date"][5:]) for t in sorted(nxt, key=lambda x: x["due_date"])] or ["- 暂无排期"]
+        block = []
+        for t in nxt:
+            block += line(t)
+        lines += block or ["- 暂无排期"]
+
+        if paused:
+            lines += ["", "【暂停中】"]
+            for t in paused:
+                lines.append("- %s（截止 %s）" % (t["title"], t["due_date"][5:] if t["due_date"] else "未定"))
+                n = note(t["id"])
+                if n:
+                    lines.append("  说明：" + n)
+
         lines += ["", "【风险 / 需要支持】"]
-        lines += ["- %s 已逾期 %d 天，进度 %d%%" % (
-            t["title"], (date.today() - datetime.strptime(t["due_date"], "%Y-%m-%d").date()).days, t["progress"])
-            for t in over] or ["- 无"]
+        risk = []
+        for t in blocked:
+            risk += line(t, "[阻塞]")
+        for t in over:
+            dd = datetime.strptime(t["due_date"], "%Y-%m-%d").date()
+            risk.append("- [逾期] %s 已逾期 %d 天（截止 %s · 进度 %d%%）" % (
+                t["title"], (date.today() - dd).days, t["due_date"][5:], t["progress"]))
+            n = note(t["id"])
+            if n:
+                risk.append("  进展：" + n)
+        lines += risk or ["- 无"]
+
         lines += ["", "【其他说明】", "- "]
+        c.close()
         self._json({"ok": True, "content": "\n".join(lines),
-                    "stats": {"done": len(done), "doing": len(doing), "overdue": len(over)}})
+                    "stats": {"done": len(done), "doing": len(nxt), "paused": len(paused),
+                              "blocked": len(blocked), "overdue": len(over)}})
 
     def serve_static(self, path):
         if path in ("/", ""):
