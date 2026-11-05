@@ -589,3 +589,18 @@ input.bad { border-color: #e5484d !important; box-shadow: 0 0 0 3px rgba(229, 72
   padding: 3px 10px; border-radius: 6px; cursor: pointer; }
 .tl-zoom button:hover { color: #111827; }
 .tl-zoom button.on { background: #fff; color: var(--accent); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.09); }
+
+/* 时间线：窗口外事务 */
+.tl-far { position: absolute; left: 2px; right: 8px; height: 20px; line-height: 20px; font-size: 11px;
+  color: #92400e; background: #fffaf0; border: 1px dashed #f0d9ae; border-radius: 6px; padding: 0 8px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tl-far a { color: #4f46e5; cursor: pointer; text-decoration: none; }
+.tl-far a:hover { text-decoration: underline; }
+.tl-far .muted { margin-left: 3px; margin-right: 6px; }
+
+/* 双段轴：近期按天 / 远期按月的断点 */
+.tl-zoom { display: none; }
+.tl-break { position: absolute; top: 0; bottom: 0; z-index: 3; pointer-events: none;
+  background: repeating-linear-gradient(90deg, #e6e8f2 0 1px, transparent 1px 4px), #fff;
+  border-left: 1px dashed #c9cee0; border-right: 1px dashed #c9cee0; opacity: .95; }
+.tl-dnums .tl-break { bottom: 0; }

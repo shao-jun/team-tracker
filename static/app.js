@@ -645,114 +645,123 @@ function viewPlan() {
 function viewTimeline() {
   const tasks = S.data.tasks.filter(t => t.start_date || t.due_date);
   if (!tasks.length) return '<div class="empty">还没有可排期的事务</div>';
-  let min = S.today, max = S.today;
+  const tD = parse(S.today);
+  let minD = S.today, maxD = S.today;
   tasks.forEach(t => {
     const s = t.start_date || t.due_date, e = t.due_date || t.start_date;
-    if (s < min) min = s;
-    if (e > max) max = e;
+    if (s < minD) minD = s;
+    if (e > maxD) maxD = e;
   });
-  const start = addDays(min, -2), end = addDays(max, 5);
-  const sD = parse(start);
-  const total = diffDays(sD, parse(end)) + 1;
 
-  /* 跨度大就换刻度（日 / 周 / 月），而不是把天数截断——跨年的长任务也能完整画出来 */
-  const zoom = S.tlZoom || 'auto';
-  const mode = zoom !== 'auto' ? zoom : (total <= 45 ? 'day' : total <= 200 ? 'week' : 'month');
-  let px = mode === 'day' ? Math.max(20, Math.min(30, 1100 / total))
-    : mode === 'week' ? Math.max(3.2, Math.min(14, 1100 / total))
-    : Math.max(1.5, Math.min(7, 1100 / total));
-  const width = Math.max(760, Math.round(total * px));
-  px = width / total;
+  /* 双段轴：近期 3 个月按天（看清单条短任务），再往后按月压缩（长任务也不丢） */
+  const GAP = 12;
+  const nearStart = (parse(minD) < parse(addDays(S.today, -7)) ? minD : addDays(S.today, -7));
+  let nearEnd = addDays(S.today, 90);
+  if (parse(nearEnd) > parse(maxD)) nearEnd = addDays(maxD, 5);
+  const hasFar = parse(maxD) > parse(nearEnd);
+  const farEnd = addDays(maxD, 5);
 
-  // 顶部条：日/周刻度显示月份，月刻度显示年份（避免与下方重复）
-  const bandByYear = mode === 'month';
-  let months = [], curM = null;
-  for (let i = 0; i < total; i++) {
-    const d = new Date(sD.getTime() + i * DAY);
-    const k = bandByYear ? String(d.getFullYear()) : d.getFullYear() + '-' + (d.getMonth() + 1);
-    if (!curM || curM.k !== k) {
-      curM = {
-        k, n: 0, from: i,
-        label: bandByYear ? d.getFullYear() + ' 年'
-          : (d.getFullYear() !== sD.getFullYear() ? d.getFullYear() + '/' : '') + (d.getMonth() + 1) + ' 月'
-      };
-      months.push(curM);
-    }
-    curM.n++;
-  }
+  const nearDays = diffDays(parse(nearStart), parse(nearEnd)) + 1;
+  const farDays = hasFar ? diffDays(parse(addDays(nearEnd, 1)), parse(farEnd)) + 1 : 0;
+  const nearPx = Math.max(9, Math.min(26, 1250 / nearDays));
+  const farPx = hasFar ? Math.max(1.1, Math.min(5, 240 / farDays)) : 0;
+  const nearW = nearDays * nearPx;
+  const farW = farDays * farPx;
+  const width = Math.round(nearW + (hasFar ? GAP + farW : 0));
 
-  // 刻度：日 / 周 / 月
-  const ticks = [];
-  const tIdx = diffDays(sD, parse(S.today));
-  if (mode === 'day') {
-    for (let i = 0; i < total; i++) {
-      const d = new Date(sD.getTime() + i * DAY);
-      ticks.push({
-        left: i * px, w: px, label: String(d.getDate()),
-        cls: ((d.getDay() === 0 || d.getDay() === 6) ? 'weekend ' : '') + (iso(d) === S.today ? 'today' : '')
-      });
+  // 日期 → x
+  const xOf = ds => {
+    if (ds <= nearEnd || !hasFar) {
+      return Math.max(0, Math.min(nearDays - 1, diffDays(parse(nearStart), parse(ds)))) * nearPx;
     }
-  } else if (mode === 'week') {
-    for (let i = 0; i < total; i += 7) {
-      const d = new Date(sD.getTime() + i * DAY);
-      const n = Math.min(7, total - i);
-      ticks.push({
-        left: i * px, w: n * px, label: (d.getMonth() + 1) + '/' + d.getDate(),
-        cls: (Math.floor(i / 7) % 2 ? 'alt ' : '') + (tIdx >= i && tIdx < i + 7 ? 'today' : '')
-      });
-    }
-  } else {
-    let cur = new Date(sD.getTime());
-    const endD = parse(end);
-    while (cur < endD) {
+    return nearW + GAP + diffDays(parse(addDays(nearEnd, 1)), parse(ds)) * farPx;
+  };
+
+  // 顶部月份条（含远期压缩段）
+  let bands = [];
+  const pushBand = (from, to) => {
+    let cur = new Date(parse(from).getTime());
+    const stop = parse(to);
+    while (cur <= stop) {
       const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      const stop = next > endD ? endD : next;
-      const a = diffDays(sD, cur), b = diffDays(sD, stop);
+      const segEnd = next <= stop ? new Date(next.getTime() - DAY) : stop;
+      bands.push({
+        left: xOf(iso(cur)), w: xOf(iso(segEnd)) - xOf(iso(cur)) + (hasFar && iso(cur) > nearEnd ? farPx : nearPx),
+        label: (segEnd.getFullYear() !== parse(nearStart).getFullYear() && cur.getMonth() === 0) ? cur.getFullYear() + '/' + (cur.getMonth() + 1) + ' 月' : (cur.getMonth() + 1) + ' 月'
+      });
+      cur = next;
+    }
+  };
+  pushBand(nearStart, nearEnd);
+  if (hasFar) pushBand(addDays(nearEnd, 1), farEnd);
+
+  // 刻度
+  const ticks = [];
+  for (let i = 0; i < nearDays; i++) {
+    const d = new Date(parse(nearStart).getTime() + i * DAY);
+    ticks.push({
+      left: i * nearPx, w: nearPx, label: String(d.getDate()),
+      cls: ((d.getDay() === 0 || d.getDay() === 6) ? 'weekend ' : '') + (iso(d) === S.today ? 'today' : '')
+    });
+  }
+  if (hasFar) {
+    let cur = parse(addDays(nearEnd, 1));
+    const stop = parse(farEnd);
+    while (cur <= stop) {
+      const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      const segEnd = next <= stop ? new Date(next.getTime() - DAY) : stop;
       ticks.push({
-        left: a * px, w: (b - a) * px,
-        label: (cur.getMonth() + 1) + ' 月',
-        cls: 'month' + (tIdx >= a && tIdx < b ? ' today' : '')
+        left: xOf(iso(cur)), w: xOf(iso(segEnd)) - xOf(iso(cur)) + farPx,
+        label: (cur.getMonth() + 1) + ' 月', cls: 'month'
       });
       cur = next;
     }
   }
 
+  const outside = tasks.filter(t => (t.start_date || t.due_date) < nearStart);
+  const inWin = tasks.filter(t => outside.indexOf(t) < 0);
+  const tIdx = diffDays(parse(nearStart), tD);
+
   let h = '<div class="card tl-wrap"><div class="tl" style="width:' + (156 + width) + 'px">';
   h += '<div class="tl-head"><div class="tl-name-col">成员 / 事务</div><div class="tl-days" style="width:' + width + 'px">';
-  h += '<div class="tl-months">' + months.map(m => '<div class="tl-month" style="left:' + (m.from * px) + 'px;width:' + (m.n * px) + 'px">' + (m.n * px < 16 ? '' : m.label) + '</div>').join('') + '</div>';
-  h += '<div class="tl-dnums">' + ticks.map(t => '<div class="tl-tick ' + t.cls + '" style="left:' + t.left + 'px;width:' + t.w + 'px">' + t.label + '</div>').join('') + '</div>';
+  h += '<div class="tl-months">' + bands.map(b => '<div class="tl-month" style="left:' + b.left + 'px;width:' + b.w + 'px">' + (b.w < 16 ? '' : b.label) + '</div>').join('') + '</div>';
+  h += '<div class="tl-dnums">' + ticks.map(t => '<div class="tl-tick ' + t.cls + '" style="left:' + t.left + 'px;width:' + t.w + 'px">' + t.label + '</div>').join('') +
+    (hasFar ? '<div class="tl-break" style="left:' + nearW + 'px;width:' + GAP + 'px"></div>' : '') + '</div>';
   h += '</div></div>';
 
   S.data.members.filter(m => m.active !== 0).concat([{ id: 0, name: '未指派', color: '#94a3b8', role: '' }]).forEach(m => {
-    const mine = tasks.filter(t => (t.member_id || 0) === m.id);
-    if (!mine.length) return;
+    const mine = inWin.filter(t => (t.member_id || 0) === m.id);
+    const far = outside.filter(t => (t.member_id || 0) === m.id);
+    if (!mine.length && !far.length) return;
     mine.sort((a, b) => (a.start_date || a.due_date) < (b.start_date || b.due_date) ? -1 : 1);
-    const rowH = mine.length * 26 + 12;
-    h += '<div class="tl-row"><div class="who">' + avatar(m, 'sm') + '<span>' + esc(m.name) + '</span><span class="muted" style="font-weight:400;font-size:11px;margin-left:auto">' + mine.length + '</span></div>';
+    const rowH = Math.max(40, (mine.length + (far.length ? 1 : 0)) * 26 + 12);
+    h += '<div class="tl-row"><div class="who">' + avatar(m, 'sm') + '<span>' + esc(m.name) + '</span><span class="muted" style="font-weight:400;font-size:11px;margin-left:auto">' + (mine.length + far.length) + '</span></div>';
     h += '<div class="tl-lane" style="width:' + width + 'px;height:' + rowH + 'px">';
-    h += '<div class="tl-grid">' + ticks.map(t => '<i class="' + t.cls + '" style="left:' + t.left + 'px;width:' + t.w + 'px"></i>').join('') + '</div>';
-    if (tIdx >= 0 && tIdx <= total) {
-      h += '<div class="tl-today-line" style="left:' + (tIdx * px) + 'px"></div>';
+    h += '<div class="tl-grid">' + ticks.map(t => '<i class="' + t.cls + '" style="left:' + t.left + 'px;width:' + t.w + 'px"></i>').join('') +
+      (hasFar ? '<div class="tl-break" style="left:' + nearW + 'px;width:' + GAP + 'px"></div>' : '') + '</div>';
+    if (tIdx >= 0 && tIdx < nearDays) {
+      h += '<div class="tl-today-line" style="left:' + (tIdx * nearPx) + 'px"></div>';
     }
     mine.forEach((t, i) => {
       const s = t.start_date || t.due_date, e = t.due_date || t.start_date;
-      const off = Math.max(0, diffDays(sD, parse(s)));
-      const len = Math.max(1, diffDays(parse(s), parse(e)) + 1);
+      const x1 = xOf(s) + 1, x2 = xOf(e) + (e <= nearEnd ? nearPx : farPx) - 1;
       const st = STATUS[t.status];
-      const leftPx = off * px + 1;
-      const wPx = Math.max(6, Math.min(len * px - 2, width - leftPx - 1));
-      h += '<div class="gbar' + (t.status === 'done' ? ' done' : '') + (wPx < 52 ? ' tiny' : '') + '" data-task="' + t.id + '" title="' + esc(t.title + ' · ' + fmt(s) + ' ~ ' + fmt(e) + ' · ' + t.progress + '%') + '" ' +
-        'style="left:' + leftPx + 'px;width:' + wPx + 'px;top:' + (8 + i * 26) + 'px;position:absolute;background:' + st.color + ';--prog:' + t.progress + '%">' +
+      const wPx = Math.max(6, Math.min(x2 - x1, width - x1 - 1));
+      h += '<div class="gbar' + (t.status === 'done' ? ' done' : '') + (wPx < 52 ? ' tiny' : '') + (x2 - x1 > wPx + 1 ? ' clipped' : '') + '" data-task="' + t.id + '" title="' + esc(t.title + ' · ' + fmt(s) + ' ~ ' + fmt(e) + ' · ' + t.progress + '%') + '" ' +
+        'style="left:' + x1 + 'px;width:' + wPx + 'px;top:' + (8 + i * 26) + 'px;position:absolute;background:' + st.color + ';--prog:' + t.progress + '%">' +
         '<span class="lbl">' + esc(t.title) + '</span></div>';
     });
+    if (far.length) {
+      h += '<div class="tl-far" style="top:' + (8 + mine.length * 26) + 'px">' + far.length + ' 项早于窗口：' +
+        far.map(t => '<a data-task="' + t.id + '">' + esc(t.title) + '</a><span class="muted">' + fmt(t.start_date || t.due_date) + '</span>').join(' · ') + '</div>';
+    }
     h += '</div></div>';
   });
   h += '</div></div>';
 
   h += '<div class="tl-legend">' + ORDER.map(s => '<span><i style="background:' + STATUS[s].color + '"></i>' + STATUS[s].label + '</span>').join('') +
     '<span><i style="background:#4f46e5"></i>今天</span>' +
-    '<span class="tl-zoom">' + [['auto', '自适应'], ['day', '日'], ['week', '周'], ['month', '月']]
-      .map(o => '<button data-tl="' + o[0] + '"' + (zoom === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>').join('') + '</span>' +
+    (hasFar ? '<span class="muted">左侧按天到 ' + fmt(nearEnd) + '，之后按月压缩（虚线处断开）</span>' : '') +
     '</div>';
   return h;
 }
