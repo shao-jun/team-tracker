@@ -1,0 +1,22 @@
+# 运行时数据：不要提交（含真实成员、手机号、头像）
+data.db
+data-*.db
+data.db-*
+avatars/
+server.log
+logs.txt
+
+# 本机截图/验证脚本
+shots/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+.DS_Store

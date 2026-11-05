@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>团队工作台</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%234f46e5'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='sans-serif'>T</text></svg>">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">◈</div>
+      <div>团队工作台<small>TEAM TRACKER</small></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-sep"></div>
+    <div class="side-label">团队成员</div>
+    <div class="side-members" id="side-members"></div>
+    <div class="side-stats" id="side-stats"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="page-title">总览</h1>
+        <p class="sub" id="page-sub"></p>
+      </div>
+      <div class="top-actions">
+        <button class="who" id="btn-who" title="点击切换身份"></button>
+        <button class="btn" id="btn-refresh" title="重新读取数据">↻ 刷新</button>
+        <button class="btn primary" id="btn-new">＋ 新建事务</button>
+      </div>
+    </header>
+    <div class="view" id="view"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer"></aside>
+<div class="modal" id="modal"></div>
+<div class="toast" id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
