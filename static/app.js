@@ -586,8 +586,20 @@ function viewKanban() {
   h += '<span class="muted" style="font-size:12px">共 ' + tasks.length + ' 项 · 卡片可拖到其他列</span></div>';
 
   h += '<div class="kanban">';
+  // 列内排序：优先级高→低，再按剩余天数从少到多，没排期的排最后
+  const PRIO_RANK = { P0: 0, P1: 1, P2: 2 };
+  const sortCards = list => list.slice().sort((a, b) => {
+    const pa = PRIO_RANK[a.priority] === undefined ? 3 : PRIO_RANK[a.priority];
+    const pb = PRIO_RANK[b.priority] === undefined ? 3 : PRIO_RANK[b.priority];
+    if (pa !== pb) return pa - pb;
+    const da = a.due_date ? daysLeft(a) : Infinity;
+    const db = b.due_date ? daysLeft(b) : Infinity;
+    if (da !== db) return da - db;
+    return a.id - b.id;
+  });
+
   ORDER.forEach(st => {
-    const list = tasks.filter(t => t.status === st);
+    const list = sortCards(tasks.filter(t => t.status === st));
     const meta = STATUS[st];
     h += '<div class="col" data-status="' + st + '"><div class="col-head"><span class="dot" style="background:' + meta.color + '"></span>' +
       meta.label + '<span class="n">' + list.length + '</span></div><div class="col-body">';
