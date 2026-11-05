@@ -651,40 +651,77 @@ function viewTimeline() {
     if (s < min) min = s;
     if (e > max) max = e;
   });
-  let start = addDays(min, -2), end = addDays(max, 5);
-  let total = diffDays(parse(start), parse(end)) + 1;
-  // 跨度上限：超过 130 天就只画到第 130 天，超出的任务单独提示（不要画到画布外）
-  const WINDOW_DAYS = 130;
-  let outOfRange = [];
-  if (total > WINDOW_DAYS) {
-    total = WINDOW_DAYS;
-    end = addDays(start, total - 1);
-    outOfRange = tasks.filter(t => (t.due_date || t.start_date) > end);
-  }
-  const dayW = Math.max(18, Math.min(30, Math.floor(1100 / total)));
-  const width = total * dayW;
+  const start = addDays(min, -2), end = addDays(max, 5);
   const sD = parse(start);
-  const weeks = '日一二三四五六';
+  const total = diffDays(sD, parse(end)) + 1;
 
-  // 月份分段
-  let months = [], cur = null;
+  /* 跨度大就换刻度（日 / 周 / 月），而不是把天数截断——跨年的长任务也能完整画出来 */
+  const zoom = S.tlZoom || 'auto';
+  const mode = zoom !== 'auto' ? zoom : (total <= 45 ? 'day' : total <= 200 ? 'week' : 'month');
+  let px = mode === 'day' ? Math.max(20, Math.min(30, 1100 / total))
+    : mode === 'week' ? Math.max(3.2, Math.min(14, 1100 / total))
+    : Math.max(1.5, Math.min(7, 1100 / total));
+  const width = Math.max(760, Math.round(total * px));
+  px = width / total;
+
+  // 顶部条：日/周刻度显示月份，月刻度显示年份（避免与下方重复）
+  const bandByYear = mode === 'month';
+  let months = [], curM = null;
   for (let i = 0; i < total; i++) {
     const d = new Date(sD.getTime() + i * DAY);
-    const key = d.getFullYear() + '-' + (d.getMonth() + 1);
-    if (!cur || cur.key !== key) { cur = { key, label: (d.getMonth() + 1) + ' 月', n: 0 }; months.push(cur); }
-    cur.n++;
+    const k = bandByYear ? String(d.getFullYear()) : d.getFullYear() + '-' + (d.getMonth() + 1);
+    if (!curM || curM.k !== k) {
+      curM = {
+        k, n: 0, from: i,
+        label: bandByYear ? d.getFullYear() + ' 年'
+          : (d.getFullYear() !== sD.getFullYear() ? d.getFullYear() + '/' : '') + (d.getMonth() + 1) + ' 月'
+      };
+      months.push(curM);
+    }
+    curM.n++;
   }
+
+  // 刻度：日 / 周 / 月
+  const ticks = [];
+  const tIdx = diffDays(sD, parse(S.today));
+  if (mode === 'day') {
+    for (let i = 0; i < total; i++) {
+      const d = new Date(sD.getTime() + i * DAY);
+      ticks.push({
+        left: i * px, w: px, label: String(d.getDate()),
+        cls: ((d.getDay() === 0 || d.getDay() === 6) ? 'weekend ' : '') + (iso(d) === S.today ? 'today' : '')
+      });
+    }
+  } else if (mode === 'week') {
+    for (let i = 0; i < total; i += 7) {
+      const d = new Date(sD.getTime() + i * DAY);
+      const n = Math.min(7, total - i);
+      ticks.push({
+        left: i * px, w: n * px, label: (d.getMonth() + 1) + '/' + d.getDate(),
+        cls: (Math.floor(i / 7) % 2 ? 'alt ' : '') + (tIdx >= i && tIdx < i + 7 ? 'today' : '')
+      });
+    }
+  } else {
+    let cur = new Date(sD.getTime());
+    const endD = parse(end);
+    while (cur < endD) {
+      const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      const stop = next > endD ? endD : next;
+      const a = diffDays(sD, cur), b = diffDays(sD, stop);
+      ticks.push({
+        left: a * px, w: (b - a) * px,
+        label: (cur.getMonth() + 1) + ' 月',
+        cls: 'month' + (tIdx >= a && tIdx < b ? ' today' : '')
+      });
+      cur = next;
+    }
+  }
+
   let h = '<div class="card tl-wrap"><div class="tl" style="width:' + (156 + width) + 'px">';
   h += '<div class="tl-head"><div class="tl-name-col">成员 / 事务</div><div class="tl-days" style="width:' + width + 'px">';
-  h += '<div class="tl-months">' + months.map(m => '<div class="tl-month" style="width:' + (m.n * dayW) + 'px">' + m.label + '</div>').join('') + '</div>';
-  h += '<div class="tl-dnums">';
-  for (let i = 0; i < total; i++) {
-    const d = new Date(sD.getTime() + i * DAY);
-    const ds = iso(d);
-    const cls = [d.getDay() === 0 || d.getDay() === 6 ? 'weekend' : '', ds === S.today ? 'today' : ''].join(' ');
-    h += '<div class="tl-day ' + cls + '" style="width:' + dayW + 'px;flex:0 0 ' + dayW + 'px">' + d.getDate() + '</div>';
-  }
-  h += '</div></div></div>';
+  h += '<div class="tl-months">' + months.map(m => '<div class="tl-month" style="left:' + (m.from * px) + 'px;width:' + (m.n * px) + 'px">' + (m.n * px < 16 ? '' : m.label) + '</div>').join('') + '</div>';
+  h += '<div class="tl-dnums">' + ticks.map(t => '<div class="tl-tick ' + t.cls + '" style="left:' + t.left + 'px;width:' + t.w + 'px">' + t.label + '</div>').join('') + '</div>';
+  h += '</div></div>';
 
   S.data.members.filter(m => m.active !== 0).concat([{ id: 0, name: '未指派', color: '#94a3b8', role: '' }]).forEach(m => {
     const mine = tasks.filter(t => (t.member_id || 0) === m.id);
@@ -693,40 +730,30 @@ function viewTimeline() {
     const rowH = mine.length * 26 + 12;
     h += '<div class="tl-row"><div class="who">' + avatar(m, 'sm') + '<span>' + esc(m.name) + '</span><span class="muted" style="font-weight:400;font-size:11px;margin-left:auto">' + mine.length + '</span></div>';
     h += '<div class="tl-lane" style="width:' + width + 'px;height:' + rowH + 'px">';
-    h += '<div class="tl-grid">';
-    for (let i = 0; i < total; i++) {
-      const d = new Date(sD.getTime() + i * DAY);
-      const ds = iso(d);
-      h += '<i class="' + (d.getDay() === 0 || d.getDay() === 6 ? 'weekend' : '') + (ds === S.today ? ' today' : '') + '"></i>';
-    }
-    h += '</div>';
-    const tIdx = diffDays(sD, parse(S.today));
+    h += '<div class="tl-grid">' + ticks.map(t => '<i class="' + t.cls + '" style="left:' + t.left + 'px;width:' + t.w + 'px"></i>').join('') + '</div>';
     if (tIdx >= 0 && tIdx <= total) {
-      h += '<div class="tl-today-line" style="left:' + (tIdx * dayW) + 'px"></div>';
+      h += '<div class="tl-today-line" style="left:' + (tIdx * px) + 'px"></div>';
     }
     mine.forEach((t, i) => {
       const s = t.start_date || t.due_date, e = t.due_date || t.start_date;
       const off = Math.max(0, diffDays(sD, parse(s)));
       const len = Math.max(1, diffDays(parse(s), parse(e)) + 1);
       const st = STATUS[t.status];
-      const leftPx = off * dayW + 1;
-      if (leftPx >= width) return;                       // 完全在窗口外，不画
-      const full = len * dayW - 2;
-      const wPx = Math.max(8, Math.min(full, width - leftPx - 1));
-      const clipped = full > wPx + 1;
-      h += '<div class="gbar' + (t.status === 'done' ? ' done' : '') + (wPx < 52 ? ' tiny' : '') + (clipped ? ' clipped' : '') + '" data-task="' + t.id + '" title="' + esc(t.title + ' · ' + fmt(s) + ' ~ ' + fmt(e) + ' · ' + t.progress + '%') + '" ' +
+      const leftPx = off * px + 1;
+      const wPx = Math.max(6, Math.min(len * px - 2, width - leftPx - 1));
+      h += '<div class="gbar' + (t.status === 'done' ? ' done' : '') + (wPx < 52 ? ' tiny' : '') + '" data-task="' + t.id + '" title="' + esc(t.title + ' · ' + fmt(s) + ' ~ ' + fmt(e) + ' · ' + t.progress + '%') + '" ' +
         'style="left:' + leftPx + 'px;width:' + wPx + 'px;top:' + (8 + i * 26) + 'px;position:absolute;background:' + st.color + ';--prog:' + t.progress + '%">' +
         '<span class="lbl">' + esc(t.title) + '</span></div>';
     });
     h += '</div></div>';
   });
   h += '</div></div>';
+
   h += '<div class="tl-legend">' + ORDER.map(s => '<span><i style="background:' + STATUS[s].color + '"></i>' + STATUS[s].label + '</span>').join('') +
-    '<span><i style="background:#4f46e5"></i>今天</span><span class="muted">条内浅色部分为已完成进度</span></div>';
-  if (outOfRange.length) {
-    h += '<div class="tl-note">时间线只画到 ' + fmt(end) + '，另有 ' + outOfRange.length + ' 项事务的截止日期在这之后（可能是日期填错）：' +
-      outOfRange.map(t => '<a data-task="' + t.id + '">' + esc(t.title) + '</a>' + '<span class="muted">（截止 ' + fmt(t.due_date) + '）</span>').join('、') + '</div>';
-  }
+    '<span><i style="background:#4f46e5"></i>今天</span>' +
+    '<span class="tl-zoom">' + [['auto', '自适应'], ['day', '日'], ['week', '周'], ['month', '月']]
+      .map(o => '<button data-tl="' + o[0] + '"' + (zoom === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>').join('') + '</span>' +
+    '</div>';
   return h;
 }
 
@@ -1350,6 +1377,8 @@ document.addEventListener('click', async e => {
     loadWeek(wk);
     return;
   }
+  const zoomBtn = e.target.closest('[data-tl]');
+  if (zoomBtn) { S.tlZoom = zoomBtn.dataset.tl; render(); return; }
   const av = e.target.closest('[data-avatar]');
   if (av) { pickAvatar(+av.dataset.avatar); return; }
   if (e.target.id === 'btn-copy-report') {
