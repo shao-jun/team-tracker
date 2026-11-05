@@ -604,3 +604,8 @@ input.bad { border-color: #e5484d !important; box-shadow: 0 0 0 3px rgba(229, 72
   background: repeating-linear-gradient(90deg, #e6e8f2 0 1px, transparent 1px 4px), #fff;
   border-left: 1px dashed #c9cee0; border-right: 1px dashed #c9cee0; opacity: .95; }
 .tl-dnums .tl-break { bottom: 0; }
+
+/* 成员卡可点进看板 */
+.member-dist, .member-card { cursor: pointer; transition: box-shadow .15s, transform .15s; }
+.member-dist:hover, .member-card:hover { box-shadow: 0 6px 18px rgba(23,26,48,.10); transform: translateY(-1px); }
+.member-dist:hover b { color: var(--accent); }

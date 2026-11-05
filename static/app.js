@@ -464,7 +464,7 @@ function viewDashboard() {
     const act = mine.filter(t => ['doing', 'review', 'blocked', 'paused'].includes(t.status));
     const kpis = S.data.kpis.filter(k => k.member_id === m.id);
     const score = kpiScore(kpis);
-    h += '<div class="card member-card"><div class="top">' + avatar(m, 'lg') +
+    h += '<div class="card member-card" data-jump-member="' + m.id + '" title="查看看板中 ' + esc(m.name) + ' 的事务"><div class="top">' + avatar(m, 'lg') +
       '<div><div class="nm">' + esc(m.name) + '</div><div class="rl">' + esc(m.role || '未填写职责') + '</div></div>' +
       '<div class="load"><b class="mono">' + mine.length + '</b>在手事务</div></div>';
     h += '<div style="display:flex;align-items:center;gap:10px;margin-top:12px"><div class="bar" style="flex:1"><i style="width:' + (score || 0) + '%;background:' + (score === null ? '#cbd0dc' : score >= 90 ? '#10b981' : score >= 70 ? '#f59e0b' : '#ef4444') + '"></i></div><span class="mono" style="font-size:11px;color:#7b8296">KPI ' + (score === null ? '未设目标' : score + '%') + '</span></div>';
@@ -632,7 +632,21 @@ function viewPlan() {
   if (f.status) tasks = tasks.filter(t => t.status === f.status);
   if (f.q) { const q = f.q.toLowerCase(); tasks = tasks.filter(t => (t.title + ' ' + (t.detail || '')).toLowerCase().includes(q)); }
   if (f.overdueOnly) tasks = tasks.filter(isOverdue);
-  tasks.sort((a, b) => (a.due_date || '9999') < (b.due_date || '9999') ? -1 : 1);
+  // 未完成优先：先按截止日期从早到晚（逾期的自然在最前），没排期的排在其后；已完成的沉到底部
+  const planKey = t => (t.status === 'done' ? 1 : 0);
+  const planDue = t => (t.due_date ? (t.status === 'done' ? t.done_at || t.due_date : t.due_date) : '9999');
+  tasks.sort((a, b) => {
+    const ka = planKey(a), kb = planKey(b);
+    if (ka !== kb) return ka - kb;
+    if (ka === 0) {
+      const da = planDue(a), db = planDue(b);
+      if (da !== db) return da < db ? -1 : 1;
+    } else {
+      const da = a.done_at || '', db = b.done_at || '';
+      if (da !== db) return da > db ? -1 : 1;   // 刚完成的在前
+    }
+    return a.id - b.id;
+  });
 
   let h = '<div class="filters">';
   h += '<div class="field"><label>成员</label><select data-filter="member"><option value="">全部</option>' +
@@ -754,7 +768,12 @@ function viewTimeline() {
     (hasFar ? '<div class="tl-break" style="left:' + nearW + 'px;width:' + GAP + 'px"></div>' : '') + '</div>';
   h += '</div></div>';
 
-  S.data.members.filter(m => m.active !== 0).concat([{ id: 0, name: '未指派', color: '#94a3b8', role: '' }]).forEach(m => {
+  const tlMembers = S.data.members.filter(m => m.active !== 0).slice().sort((a, b) => {
+    const am = S.me && a.id === S.me.id, bm = S.me && b.id === S.me.id;
+    if (am !== bm) return am ? -1 : 1;
+    return String(a.name).localeCompare(String(b.name), 'zh-Hans-CN');
+  });
+  tlMembers.concat([{ id: 0, name: '未指派', color: '#94a3b8', role: '' }]).forEach(m => {
     const mine = inWin.filter(t => (t.member_id || 0) === m.id);
     const far = outside.filter(t => (t.member_id || 0) === m.id);
     if (!mine.length && !far.length) return;
@@ -1049,7 +1068,7 @@ function viewTeam() {
   h += '<div class="section-title" style="margin-top:26px">每个成员的事务分布</div><div class="member-cards">';
   members.filter(m => m.active !== 0).forEach(m => {
     const mine = S.data.tasks.filter(t => t.member_id === m.id);
-    h += '<div class="card pad"><div style="display:flex;align-items:center;gap:9px">' + avatar(m) + '<b>' + esc(m.name) + '</b>' +
+    h += '<div class="card pad member-dist" data-jump-member="' + m.id + '" title="查看看板中 ' + esc(m.name) + ' 的事务"><div style="display:flex;align-items:center;gap:9px">' + avatar(m) + '<b>' + esc(m.name) + '</b>' +
       '<span class="muted" style="margin-left:auto;font-size:11.5px">' + mine.length + ' 项总计</span></div>' +
       '<div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">' +
       ORDER.map(s => { const n = mine.filter(t => t.status === s).length; if (!n) return ''; return '<span class="chip ' + s + '">' + STATUS[s].label + ' ' + n + '</span>'; }).join('') +
@@ -1297,6 +1316,17 @@ document.addEventListener('click', async e => {
   if (nav) { S.view = nav.dataset.view; render(); window.scrollTo(0, 0); return; }
   const jump = e.target.closest('[data-view-jump]');
   if (jump) { S.view = jump.dataset.viewJump; render(); return; }
+
+  // 成员卡：点人 → 看板 + 按该成员过滤（点卡里的具体事务仍然先打开抽屉）
+  const mjump = e.target.closest('[data-jump-member]');
+  if (mjump && !e.target.closest('[data-task]')) {
+    S.filter.member = mjump.dataset.jumpMember;
+    S.filter.status = '';
+    S.view = 'kanban';
+    render();
+    window.scrollTo(0, 0);
+    return;
+  }
 
   const card = e.target.closest('[data-task]');
   if (card && !e.target.closest('[data-quick]')) { openTask(+card.dataset.task); return; }
