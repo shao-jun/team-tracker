@@ -682,8 +682,15 @@ function viewPlan() {
 
 /* ------------------------------------------------------------ 时间线 */
 function viewTimeline() {
-  const tasks = S.data.tasks.filter(t => t.start_date || t.due_date);
-  if (!tasks.length) return '<div class="empty">还没有可排期的事务</div>';
+  const dated = S.data.tasks.filter(t => t.start_date || t.due_date);
+  const doneCount = dated.filter(t => t.status === 'done').length;
+  // 默认不显示已完成，勾选后才参与绘制（也不参与时间轴范围计算）
+  const tasks = S.tlDone ? dated.slice() : dated.filter(t => t.status !== 'done');
+  if (!tasks.length) {
+    return '<div class="empty">还没有可排期的事务' +
+      (!S.tlDone && doneCount ? '（已有 ' + doneCount + ' 项已完成，勾选下方「显示已完成」可查看）' : '') + '</div>' +
+      tlDoneToggle(doneCount);
+  }
   const tD = parse(S.today);
   let minD = S.today, maxD = S.today;
   tasks.forEach(t => {
@@ -804,10 +811,15 @@ function viewTimeline() {
   h += '</div></div>';
 
   h += '<div class="tl-legend">' + ORDER.map(s => '<span><i style="background:' + STATUS[s].color + '"></i>' + STATUS[s].label + '</span>').join('') +
-    '<span><i style="background:#4f46e5"></i>今天</span>' +
+    '<span><i style="background:#4f46e5"></i>今天</span>' + tlDoneToggle(doneCount) +
     (hasFar ? '<span class="muted">左侧按天到 ' + fmt(nearEnd) + '，之后按月压缩（虚线处断开）</span>' : '') +
     '</div>';
   return h;
+}
+
+function tlDoneToggle(n) {
+  return '<label class="tl-done-toggle"><input type="checkbox" data-tl-done' + (S.tlDone ? ' checked' : '') + '> 显示已完成' +
+    (n ? '<span class="n">' + n + '</span>' : '') + '</label>';
 }
 
 /* ------------------------------------------------------------ KPI */
@@ -1327,6 +1339,9 @@ document.addEventListener('click', async e => {
     window.scrollTo(0, 0);
     return;
   }
+
+  const tlDone = e.target.closest('[data-tl-done]');
+  if (tlDone) { S.tlDone = tlDone.checked; render(); return; }
 
   const card = e.target.closest('[data-task]');
   if (card && !e.target.closest('[data-quick]')) { openTask(+card.dataset.task); return; }

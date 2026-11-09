@@ -609,3 +609,10 @@ input.bad { border-color: #e5484d !important; box-shadow: 0 0 0 3px rgba(229, 72
 .member-dist, .member-card { cursor: pointer; transition: box-shadow .15s, transform .15s; }
 .member-dist:hover, .member-card:hover { box-shadow: 0 6px 18px rgba(23,26,48,.10); transform: translateY(-1px); }
 .member-dist:hover b { color: var(--accent); }
+
+/* 时间线：显示已完成开关 */
+.tl-done-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: 14px; cursor: pointer;
+  font-size: 12px; color: #4b5266; background: #f4f5fa; border-radius: 8px; padding: 3px 10px; user-select: none; }
+.tl-done-toggle:hover { background: #eceef7; }
+.tl-done-toggle input { margin: 0; cursor: pointer; }
+.tl-done-toggle .n { font-size: 10.5px; color: #7b8296; background: #fff; border-radius: 6px; padding: 0 5px; }
