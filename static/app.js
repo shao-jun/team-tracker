@@ -379,9 +379,13 @@ function buildReminders() {
     const n = daysLeft(t);
     if (isOverdue(t)) { push('overdue', t, '已逾期 ' + (-n) + ' 天，进度 ' + t.progress + '%'); return; }
     if (t.status === 'blocked') { push('blocked', t, '阻塞中，需要外部条件解除'); return; }
+    // 停滞：只对「该开工了」的事务提醒——开始日期已到（或已有进度），且 5 天没有任何更新
     const la = lastActivity(t);
-    if (t.status !== 'todo' && (!la || diffDays(parse(la.slice(0, 10)), todayD()) >= 4)) {
-      push('stalled', t, la ? '已 ' + diffDays(parse(la.slice(0, 10)), todayD()) + ' 天没有更新' : '一直没有写进展，也没改进度');
+    const idle = la ? diffDays(parse(la.slice(0, 10)), todayD()) : null;
+    const notStarted = t.progress === 0 && t.start_date && t.start_date > S.today;
+    const shouldRun = !notStarted && (t.progress > 0 || (t.start_date && t.start_date <= S.today));
+    if (t.status !== 'todo' && shouldRun && (idle === null || idle >= 5)) {
+      push('stalled', t, idle === null ? '一直没有写进展，也没改进度' : '已 ' + idle + ' 天没有更新');
       return;
     }
     if (n !== null && n <= 2) { push('soon', t, n === 0 ? '今天到期' : '还有 ' + n + ' 天到期'); return; }
@@ -867,7 +871,9 @@ function viewKpi() {
 function viewAlerts() {
   const rem = buildReminders();
   const groups = ['overdue', 'blocked', 'soon', 'stalled', 'nodate'];
-  let h = '<div class="section-title">待处理提醒<span class="count">共 ' + rem.length + ' 条</span></div>';
+  let h = '<div class="section-title">待处理提醒<span class="count">共 ' + rem.length + ' 条</span></div>' +
+    '<div class="muted" style="font-size:11.5px;margin:-6px 0 12px">每个事务只报一条，按 逾期 › 阻塞 › 停滞 › 临期 › 未排期 取最紧急的；' +
+    '还没到开始日期的事务不做停滞提醒，开始满 5 天且没写进展/没改进度才会提示停滞。</div>';
   if (!rem.length) return h + '<div class="empty">所有事务都在计划内，没有需要提醒的事项 🎉</div>';
   groups.forEach(g => {
     const list = rem.filter(r => r.kind === g);
