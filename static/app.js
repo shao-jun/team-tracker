@@ -433,6 +433,8 @@ function render() {
     kpi: viewKpi, alerts: viewAlerts, report: viewReport, team: viewTeam
   })[S.view];
   el.innerHTML = fn();
+  // 抽屉状态跟着数据走：没有正在编辑的事务就把抽屉收起来，避免创建后残留在页面上
+  if (!S.openTask) closeDrawer();
   if (S.view === 'report') renderReportBox();
   renderSidebar();
   renderSiteStats();
@@ -1226,6 +1228,7 @@ async function saveTask() {
       const j = await api('/api/tasks', 'POST', p);
       S.openTask = null;
       await reload();
+      closeDrawer();
       toast('事务已创建');
     } else {
       await api('/api/tasks/' + S.openTask, 'PATCH', p);
