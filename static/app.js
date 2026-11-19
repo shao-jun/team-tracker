@@ -957,15 +957,15 @@ function viewReport() {
   h += '<div class="section-title" style="margin-top:24px">团队周报<span class="count">' +
     wk.replace(/-/g, '/') + ' ~ ' + end.replace(/-/g, '/') + '</span></div>';
   h += '<div class="report-bar">' +
-    '<button class="btn primary" id="btn-gen-report"' + (d.all_submitted ? '' : ' disabled') + '>生成团队周报</button>' +
-    (d.all_submitted ? '' : '<button class="btn" id="btn-gen-force">先生成草稿</button>') +
     '<button class="btn" id="btn-copy-report">复制</button>' +
     '<button class="btn" id="btn-dl-report">下载 .md</button>' +
+    '<button class="btn ghost" id="btn-gen-report">重新生成</button>' +
     '<span class="muted" style="font-size:12px;margin-left:auto">' +
-    (d.all_submitted ? '全员已提交，可以出正式周报' : '全员提交后解锁') + '</span></div>';
+    (S.reportMd && S.reportMdWeek === wk ? '进入本页自动生成，数据变动后点「重新生成」' : '正在生成…') + '</span></div>';
   h += '<div class="card"><div class="report-pre" id="report-body">' +
     (S.reportMd && S.reportMdWeek === wk ? mdToHtml(S.reportMd)
-      : '点击「生成团队周报」，汇总本周完成、进行中、逾期风险、下周计划，以及每位成员提交的周报原文。') + '</div></div>';
+      : '<span class="muted">正在生成团队周报…</span>') + '</div></div>';
+  setTimeout(function () { ensureReport(wk); }, 0);
   return h;
 }
 
@@ -984,6 +984,20 @@ function renderReportBox() {
   const box = document.getElementById('report-body');
   if (!box || !S.reportMd || S.reportMdWeek !== S.reportWeek) return;
   box.innerHTML = mdToHtml(S.reportMd);
+}
+
+// 进入周报页就自动生成并留在页面上，不用每次点按钮
+async function ensureReport(wk) {
+  if (!wk || S.reportBusy === wk) return;
+  if (S.reportMd && S.reportMdWeek === wk) return;
+  S.reportBusy = wk;
+  try {
+    const j = await api('/api/report?start=' + wk + '&end=' + addDays(wk, 6));
+    S.reportMd = j.markdown;
+    S.reportMdWeek = wk;
+    if (S.view === 'report') render();
+  } catch (e) { /* 生成失败保持原状，页面上的按钮还能重试 */ }
+  finally { S.reportBusy = null; }
 }
 
 async function genReport(force) {
@@ -1453,8 +1467,7 @@ document.addEventListener('click', async e => {
     return;
   }
 
-  if (e.target.id === 'btn-gen-report') { await genReport(false); return; }
-  if (e.target.id === 'btn-gen-force') { await genReport(true); return; }
+  if (e.target.id === 'btn-gen-report') { await genReport(true); return; }
   if (e.target.id === 'btn-submit-report') { await submitReport(); return; }
   if (e.target.id === 'btn-draft-report') { await fillDraft(); return; }
   if (e.target.id === 'btn-who') { showIdentityModal(false); return; }
@@ -1478,17 +1491,18 @@ document.addEventListener('click', async e => {
   const av = e.target.closest('[data-avatar]');
   if (av) { pickAvatar(+av.dataset.avatar); return; }
   if (e.target.id === 'btn-copy-report') {
-    if (!S.reportMd) return toast('先生成团队周报', true);
+    if (!S.reportMd) return toast('周报还在生成，稍后再试', true);
     try { await navigator.clipboard.writeText(S.reportMd); toast('已复制到剪贴板'); }
     catch (_) { toast('复制失败，请手动选择文本', true); }
     return;
   }
   if (e.target.id === 'btn-dl-report') {
-    if (!S.reportMd) return toast('先生成团队周报', true);
+    if (!S.reportMd) return toast('周报还在生成，稍后再试', true);
+    const wk = S.reportMdWeek || S.reportWeek;
     const blob = new Blob([S.reportMd], { type: 'text/markdown;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = '团队周报-' + (S.reportMdWeek || S.reportWeek) + '.md';
+    a.download = '团队周报-' + wk + '_' + addDays(wk, 6) + '.md';
     a.click();
     URL.revokeObjectURL(a.href);
     toast('已下载');

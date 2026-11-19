@@ -602,8 +602,8 @@ def build_report(start_s, end_s):
     lines = []
     lines.append("# 团队周报（%s ~ %s）" % (start_s, end_s))
     lines.append("")
-    lines.append("> 自动生成于 %s · 共 %d 名成员 · 本期完成 %d 项，进行中 %d 项，逾期 %d 项"
-                 % (datetime.now().strftime("%Y-%m-%d %H:%M"), len(members), len(done), len(doing), len(overdue)))
+    lines.append("> 自动生成于 %s · 共 %d 名成员 · 本期完成 %d 项，进行中 %d 项"
+                 % (datetime.now().strftime("%Y-%m-%d %H:%M"), len(members), len(done), len(doing)))
     lines.append("")
 
     lines.append("## 一、本期完成（%d 项）" % len(done))
@@ -635,46 +635,6 @@ def build_report(start_s, end_s):
             "%s（%s）" % (t["title"], mname.get(t["member_id"], "未指派")) for t in paused)))
     lines.append("")
 
-    lines.append("## 三、风险与逾期（%d 项）" % len(overdue))
-    if overdue:
-        for t in sorted(overdue, key=lambda x: x["due_date"]):
-            days = (date.today() - datetime.strptime(t["due_date"], "%Y-%m-%d").date()).days
-            lines.append("- **%s** — %s · 已逾期 %d 天 · 当前进度 %d%%" % (
-                t["title"], mname.get(t["member_id"], "未指派"), days, t["progress"]))
-    else:
-        lines.append("- 无逾期事务")
-    lines.append("")
-
-    lines.append("## 四、下周计划（%d 项）" % len(upcoming))
-    if upcoming:
-        for t in upcoming:
-            lines.append("- %s — %s · 截止 %s · 优先级 %s" % (
-                t["title"], mname.get(t["member_id"], "未指派"), fdate(t["due_date"]), PRIO_CN.get(t["priority"], t["priority"])))
-    else:
-        lines.append("- 暂无排期事务")
-    lines.append("")
-
-    lines.append("## 五、成员概览")
-    lines.append("")
-    lines.append("| 成员 | 进行中 | 本期完成 | KPI 达成 |")
-    lines.append("| --- | --- | --- | --- |")
-    for m in members:
-        mine = [k for k in kpis if k["member_id"] == m["id"]]
-        if mine:
-            rates = []
-            for k in mine:
-                tgt = k["target"] or 1
-                if k["direction"] == "down":
-                    rates.append(min(1.6, tgt / k["current"]) if k["current"] else 0)
-                else:
-                    rates.append(min(1.6, k["current"] / tgt) if tgt else 0)
-            rate = int(sum(rates) / len(rates) * 100)
-        else:
-            rate = 0
-        lines.append("| %s | %d | %d | %d%% |" % (
-            m["name"], by_member[m["id"]]["doing"], by_member[m["id"]]["done"], rate))
-    lines.append("")
-
     c2 = conn()
     reps = rows(c2.execute(
         "SELECT r.*, m.name AS mname FROM reports r LEFT JOIN members m ON m.id = r.member_id "
@@ -683,7 +643,7 @@ def build_report(start_s, end_s):
     submitted_ids = set(r["member_id"] for r in reps)
     missing = [m for m in members if m["id"] not in submitted_ids]
 
-    lines.append("## 六、成员周报（已提交 %d / %d）" % (len(submitted_ids), len(members)))
+    lines.append("## 三、成员周报（已提交 %d / %d）" % (len(submitted_ids), len(members)))
     lines.append("")
     if reps:
         for r in reps:
@@ -700,13 +660,6 @@ def build_report(start_s, end_s):
         lines.append("未提交：%s" % "、".join(m["name"] for m in missing))
         lines.append("")
 
-    stalled = [t for t in doing if not any(u["task_id"] == t["id"] and u["created_at"][:10] >= (date.today() - timedelta(days=4)).isoformat() for u in ups)]
-    if stalled:
-        lines.append("## 七、需要关注")
-        for t in stalled[:5]:
-            lines.append("- %s（%s）超过 3 天无进展记录，建议同步进展或调整排期" % (
-                t["title"], mname.get(t["member_id"], "未指派")))
-        lines.append("")
     return "\n".join(lines)
 
 
