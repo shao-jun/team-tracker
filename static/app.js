@@ -1171,7 +1171,7 @@ function renderDrawer() {
         return '<div class="upd">' + avatar(m, 'sm') + '<div class="body"><div class="txt' + (u.kind === 'system' ? ' sys' : '') + '">' + esc(u.content) + '</div>' +
           '<div class="when">' + esc((m ? m.name : '') + ' · ' + fmtFull(u.created_at)) + '</div></div></div>';
       }).join('') || '<div class="muted" style="font-size:12px;padding:8px 0">还没有进展记录</div>') + '</div>' +
-      '<div class="upd-input"><textarea id="f-upd" placeholder="记录一条进展（⌘/Ctrl + Enter 提交）"></textarea><button class="btn" id="btn-add-upd">添加</button></div>' +
+      '<div class="upd-input"><textarea id="f-upd" placeholder="记录一条进展（Ctrl + Enter 提交）"></textarea><button class="btn" id="btn-add-upd">添加</button></div>' +
       '<div class="muted" style="font-size:11px;margin-top:6px">将以 <b>' + esc(S.me ? S.me.name : '未识别身份') + '</b> 的身份记录' + (S.me ? '（' + esc(S.ip) + '）' : '') + '</div>' +
       taskLogsHtml(t.id) : '') +
     '</div>' +
@@ -1223,6 +1223,9 @@ async function saveTask() {
   if (!p.title) return toast('请填写标题', true);
   const btn = document.getElementById('btn-save');
   btn.disabled = true;
+  // 进展框里还有没提交的文字，保存时一并存进去，避免漏记
+  const noteEl = document.getElementById('f-upd');
+  const pendingNote = noteEl ? noteEl.value.trim() : '';
   try {
     if (S.openTask === 'new') {
       const j = await api('/api/tasks', 'POST', p);
@@ -1231,9 +1234,14 @@ async function saveTask() {
       closeDrawer();
       toast('事务已创建');
     } else {
-      await api('/api/tasks/' + S.openTask, 'PATCH', p);
+      const tid = S.openTask;
+      if (pendingNote) {
+        await api('/api/tasks/' + tid + '/updates', 'POST', { content: pendingNote });
+        if (noteEl) noteEl.value = '';
+      }
+      await api('/api/tasks/' + tid, 'PATCH', p);
       await reload();
-      toast('已保存');
+      toast(pendingNote ? '已保存，进展也已记录' : '已保存');
     }
   } catch (e) { toast(e.message, true); }
   finally { btn.disabled = false; }
