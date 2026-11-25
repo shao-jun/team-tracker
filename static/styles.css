@@ -385,7 +385,13 @@ table.list .pbar .bar { flex: 1; }
   border-radius: 9px; padding: 8px 12px; line-height: 1.7; }
 .tl-note a { color: #4f46e5; cursor: pointer; text-decoration: none; }
 .tl-note a:hover { text-decoration: underline; }
-.gbar.tiny .lbl { display: none; }
+.gbar.tiny { overflow: visible; }
+.gbar.tiny .lbl {
+  position: absolute; left: calc(100% + 5px); top: 0; height: 20px; line-height: 20px;
+  max-width: 420px; padding: 0 4px; border-radius: 4px; background: rgba(255, 255, 255, .86);
+  color: #4b5565; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-decoration: none; pointer-events: none;
+}
 .gbar.done { opacity: .62; }
 .gbar::after {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0;
@@ -516,10 +522,6 @@ table.list .pbar .bar { flex: 1; }
 .upd .body .when { font-size: 11px; color: #a0a6b6; margin-top: 2px; }
 .upd-input { display: flex; gap: 8px; margin-top: 12px; align-items: flex-start; }
 .upd-input textarea { flex: 1; min-height: 56px; }
-.gbar.cancelled {
-  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, .55) 0 5px, rgba(255, 255, 255, 0) 5px 10px) !important;
-  border: 1px dashed #64748b;
-}
 .gbar.cancelled .lbl { text-decoration: line-through; }
 .upd-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .upd-thumbs .thumb { position: relative; display: inline-block; }
@@ -529,6 +531,10 @@ table.list .pbar .bar { flex: 1; }
 .upd-pics .upd-img { display: inline-block; border-radius: 8px; overflow: hidden; border: 1px solid #e6e9f2; }
 .upd-pics .upd-img img { width: 132px; height: 96px; object-fit: cover; display: block; transition: transform .12s; }
 .upd-pics .upd-img:hover img { transform: scale(1.03); }
+.lightbox { position: fixed; inset: 0; background: rgba(15, 23, 42, .84); display: none; align-items: center; justify-content: center; z-index: 300; padding: 36px; cursor: zoom-out; }
+.lightbox.show { display: flex; }
+.lightbox img { max-width: 92vw; max-height: 88vh; border-radius: 10px; background: #fff; box-shadow: 0 24px 70px rgba(0, 0, 0, .5); }
+.lightbox .hint { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center; color: rgba(255, 255, 255, .72); font-size: 12px; }
 
 /* ---------------- toast ---------------- */
 .toast {

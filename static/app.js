@@ -221,6 +221,20 @@ function showVisitsModal() {
   overlay.classList.add('show');
 }
 
+function showLightbox(src) {
+  let box = document.getElementById('lightbox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'lightbox';
+    box.className = 'lightbox';
+    box.innerHTML = '<img alt=""><div class="hint">点击任意处或按 Esc 关闭</div>';
+    box.addEventListener('click', () => box.classList.remove('show'));
+    document.body.appendChild(box);
+  }
+  box.querySelector('img').src = src;
+  box.classList.add('show');
+}
+
 function showGuestModal() {
   const modal = document.getElementById('modal');
   const overlay = document.getElementById('overlay');
@@ -1245,7 +1259,7 @@ function renderDrawer() {
     (t ? '<div class="section-title" style="margin-top:22px">进展记录<span class="count">' + taskUpdates(t.id).length + '</span></div>' +
       '<div class="updates">' + (taskUpdates(t.id).map(u => {
         const m = memberById(u.member_id);
-        const pics = updImages(u).map(src => '<a class="upd-img" href="' + esc(src) + '" target="_blank" rel="noopener"><img src="' + esc(src) + '" alt="进展图片" loading="lazy"></a>').join('');
+        const pics = updImages(u).map(src => '<span class="upd-img" data-lightbox="' + esc(src) + '" style="cursor:zoom-in"><img src="' + esc(src) + '" alt="进展图片" loading="lazy"></span>').join('');
         return '<div class="upd">' + avatar(m, 'sm') + '<div class="body"><div class="txt' + (u.kind === 'system' ? ' sys' : '') + '">' + esc(u.content) + '</div>' +
           (pics ? '<div class="upd-pics">' + pics + '</div>' : '') +
           '<div class="when">' + esc((m ? m.name : '') + ' · ' + fmtFull(u.created_at)) + '</div></div></div>';
@@ -1579,6 +1593,8 @@ document.addEventListener('click', async e => {
     catch (_) { toast('复制失败，请手动选择文本', true); }
     return;
   }
+  const lb = e.target.closest && e.target.closest('[data-lightbox]');
+  if (lb) { showLightbox(lb.dataset.lightbox); return; }
   if (e.target.dataset && e.target.dataset.thumbDel !== undefined) {
     S.pendingImgs.splice(Number(e.target.dataset.thumbDel), 1);
     renderUpdThumbs();
@@ -1608,6 +1624,8 @@ document.addEventListener('change', e => {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    const lb = document.getElementById('lightbox');
+    if (lb && lb.classList.contains('show')) { lb.classList.remove('show'); return; }
     closeDrawer();
     document.getElementById('modal').classList.remove('show');
     document.getElementById('overlay').classList.remove('show');
