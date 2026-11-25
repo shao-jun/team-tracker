@@ -181,6 +181,7 @@ body.guest .kcard { cursor: default; }
 .chip.review { background: var(--purple-soft); color: #6d28d9; }
 .chip.blocked { background: var(--red-soft); color: #b91c1c; }
 .chip.done { background: var(--green-soft); color: #047857; }
+.chip.cancelled { background: #eef0f5; color: #64748b; text-decoration: line-through; }
 .chip.p0 { background: #fee2e2; color: #b91c1c; }
 .chip.p1 { background: #ffedd5; color: #b45309; }
 .chip.p2 { background: #eef0f5; color: #64748b; }
@@ -288,7 +289,7 @@ body.guest .kcard { cursor: default; }
 /* ---------------- kanban ---------------- */
 .kanban-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
 .kanban {
-  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 10px; align-items: stretch;
   overflow-x: auto; padding-bottom: 8px;
 }
@@ -515,6 +516,19 @@ table.list .pbar .bar { flex: 1; }
 .upd .body .when { font-size: 11px; color: #a0a6b6; margin-top: 2px; }
 .upd-input { display: flex; gap: 8px; margin-top: 12px; align-items: flex-start; }
 .upd-input textarea { flex: 1; min-height: 56px; }
+.gbar.cancelled {
+  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, .55) 0 5px, rgba(255, 255, 255, 0) 5px 10px) !important;
+  border: 1px dashed #64748b;
+}
+.gbar.cancelled .lbl { text-decoration: line-through; }
+.upd-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.upd-thumbs .thumb { position: relative; display: inline-block; }
+.upd-thumbs .thumb img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e6ef; display: block; }
+.upd-thumbs .thumb button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: none; background: #ef4444; color: #fff; font-size: 10px; line-height: 1; cursor: pointer; padding: 0; }
+.upd-pics { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.upd-pics .upd-img { display: inline-block; border-radius: 8px; overflow: hidden; border: 1px solid #e6e9f2; }
+.upd-pics .upd-img img { width: 132px; height: 96px; object-fit: cover; display: block; transition: transform .12s; }
+.upd-pics .upd-img:hover img { transform: scale(1.03); }
 
 /* ---------------- toast ---------------- */
 .toast {
@@ -568,14 +582,14 @@ input.bad { border-color: #e5484d !important; box-shadow: 0 0 0 3px rgba(229, 72
 /* 宽屏：内容铺满，多栏承载更多信息 */
 
 @media (max-width: 1400px) {
-  .kanban { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .kanban { grid-template-columns: repeat(7, minmax(0, 1fr)); }
   .kanban .kcard .t { font-size: 12px; }
 }
 
 @media (max-width: 1180px) {
   .stat-row { grid-template-columns: repeat(2, 1fr); }
   .grid-2 { grid-template-columns: 1fr; }
-  .kanban { grid-template-columns: repeat(6, 200px); }
+  .kanban { grid-template-columns: repeat(7, 186px); }
 }
 @media (max-width: 900px) {
   .sidebar { display: none; }

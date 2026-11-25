@@ -14,6 +14,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import uuid
 import time
 from datetime import date, datetime, timedelta
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -23,18 +24,21 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, "data.db")
 STATIC = os.path.join(BASE, "static")
 AVATAR_DIR = os.path.join(BASE, "avatars")
+ATTACH_DIR = os.path.join(BASE, "attachments")
 PORT = int(os.environ.get("PORT", "8770"))
 
 CATEGORIES = ("需求", "任务", "其他")
 PRIO_CN = {"P0": "高", "P1": "中", "P2": "低"}
 
-STATUS_CN = {"todo": "待办", "doing": "进行中", "paused": "暂停", "review": "待验收", "blocked": "阻塞", "done": "已完成"}
+STATUS_CN = {"todo": "待办", "doing": "进行中", "paused": "暂停", "review": "待验收",
+             "blocked": "阻塞", "done": "已完成", "cancelled": "已取消"}
 FIELD_CN = {
     "title": "标题", "detail": "说明", "member_id": "负责人", "status": "状态",
     "priority": "优先级", "category": "类型", "progress": "进度",
     "start_date": "开始日期", "due_date": "截止日期", "estimate": "预估工时",
 }
 MAX_AVATAR_BYTES = 3 * 1024 * 1024
+MAX_IMAGE_BYTES = 6 * 1024 * 1024
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -115,6 +119,7 @@ CREATE TABLE IF NOT EXISTS updates (
   member_id INTEGER,
   content TEXT NOT NULL,
   kind TEXT DEFAULT 'note',
+  images TEXT DEFAULT '',
   created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS visits (
@@ -407,6 +412,8 @@ def migrate(c):
     uc = cols("updates")
     if "ip" not in uc:
         c.execute("ALTER TABLE updates ADD COLUMN ip TEXT DEFAULT ''")
+    if "images" not in uc:
+        c.execute("ALTER TABLE updates ADD COLUMN images TEXT DEFAULT ''")
     vc = cols("visits")
     if vc:
         for name in ("platform", "note"):
@@ -536,7 +543,9 @@ def task_payload(data, existing=None):
     if out.get("status") == "done":
         out["progress"] = 100
         out["done_at"] = now()
-    elif existing and existing.get("status") == "done" and "status" in out:
+    elif out.get("status") == "cancelled" and (existing or {}).get("status") != "cancelled":
+        out["done_at"] = now()
+    elif existing and existing.get("status") in ("done", "cancelled") and "status" in out:
         out["done_at"] = None
     # 进度与状态联动：有进度就是进行中，100% 就是已完成，归零回未开始
     if out.get("progress") is not None:
@@ -582,7 +591,7 @@ def build_report(start_s, end_s):
 
     done = [t for t in tasks if done_in(t)]
     doing = [t for t in tasks if t["status"] in ("doing", "review", "blocked")]
-    overdue = [t for t in tasks if t["status"] not in ("done", "paused")
+    overdue = [t for t in tasks if t["status"] not in ("done", "paused", "cancelled")
                and t["due_date"] and t["due_date"] < date.today().isoformat()]
     paused = [t for t in tasks if t["status"] == "paused"]
     nxt_start = end_d + timedelta(days=1)
@@ -827,11 +836,11 @@ class Handler(BaseHTTPRequestHandler):
 
         done = [t for t in tasks if t["status"] == "done" and t["done_at"] and w_start <= t["done_at"][:10] <= w_end]
         paused = [t for t in tasks if t["status"] == "paused"]
-        nxt = [t for t in tasks if t["status"] not in ("done", "paused", "blocked")
+        nxt = [t for t in tasks if t["status"] not in ("done", "paused", "blocked", "cancelled")
                and t["due_date"] and n_start <= t["due_date"] <= n_end]
         nxt.sort(key=lambda x: (x["due_date"] or "9999", x["id"]))
         blocked = [t for t in tasks if t["status"] == "blocked"]
-        over = [t for t in tasks if t["status"] not in ("done", "paused", "blocked")
+        over = [t for t in tasks if t["status"] not in ("done", "paused", "blocked", "cancelled")
                 and t["due_date"] and t["due_date"] < today()]
 
         lines = ["【本周完成】"]
@@ -884,6 +893,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._err("非法路径", 400)
         if rel.startswith("avatars/"):
             full = os.path.join(AVATAR_DIR, rel[len("avatars/"):])
+        elif rel.startswith("attachments/"):
+            full = os.path.join(ATTACH_DIR, rel[len("attachments/"):])
         else:
             full = os.path.join(STATIC, rel)
         if not os.path.isfile(full):
@@ -924,6 +935,8 @@ class Handler(BaseHTTPRequestHandler):
             m = re.match(r"^/api/members/(\d+)/avatar$", path)
             if m:
                 return self.upload_avatar(int(m.group(1)))
+            if path == "/api/upload":
+                return self.upload_image()
             m = re.match(r"^/api/tasks/(\d+)/updates$", path)
             if m:
                 return self.add_update(int(m.group(1)))
@@ -1007,8 +1020,11 @@ class Handler(BaseHTTPRequestHandler):
     def add_update(self, task_id):
         d = self._body()
         content = (d.get("content") or "").strip()
-        if not content:
+        imgs = [x for x in (d.get("images") or []) if isinstance(x, str) and x.startswith("/attachments/")]
+        if not content and not imgs:
             return self._err("进展内容不能为空")
+        content = content or "（图片）"
+        img_json = json.dumps(imgs, ensure_ascii=False) if imgs else ""
         ip = client_ip(self)
         c = conn()
         t = c.execute("SELECT member_id FROM tasks WHERE id=?", (task_id,)).fetchone()
@@ -1017,8 +1033,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._err("事务不存在", 404)
         me = who_is(c, ip)
         mid = (me["id"] if me else None) or d.get("member_id") or t["member_id"]
-        c.execute("INSERT INTO updates(task_id,member_id,content,kind,ip,created_at) VALUES(?,?,?,?,?,?)",
-                  (task_id, mid, content, "note", ip, now()))
+        c.execute("INSERT INTO updates(task_id,member_id,content,kind,images,ip,created_at) VALUES(?,?,?,?,?,?,?)",
+                  (task_id, mid, content, "note", img_json, ip, now()))
         c.execute("UPDATE tasks SET updated_at=? WHERE id=?", (now(), task_id))
         c.commit()
         c.close()
@@ -1096,6 +1112,27 @@ class Handler(BaseHTTPRequestHandler):
         c.commit()
         c.close()
         self._json({"ok": True, "avatar": "/avatars/" + name})
+
+    def upload_image(self):
+        """进展里粘贴/选择的图片：base64 落盘到 attachments/，返回可访问 URL。"""
+        d = self._body()
+        data = d.get("data") or ""
+        m = re.match(r"^data:image/(png|jpeg|jpg|webp|gif);base64,(.+)$", data, re.S)
+        if not m:
+            return self._err("图片格式不支持，请用 PNG / JPG / WebP / GIF")
+        ext = "jpg" if m.group(1) in ("jpeg", "jpg") else m.group(1)
+        try:
+            raw = base64.b64decode(m.group(2))
+        except Exception:
+            return self._err("图片数据损坏")
+        if len(raw) > MAX_IMAGE_BYTES:
+            return self._err("图片太大，请控制在 6MB 内")
+        sub = datetime.now().strftime("%Y%m")
+        os.makedirs(os.path.join(ATTACH_DIR, sub), exist_ok=True)
+        name = "%s-%s.%s" % (datetime.now().strftime("%d%H%M%S"), uuid.uuid4().hex[:6], ext)
+        with open(os.path.join(ATTACH_DIR, sub, name), "wb") as f:
+            f.write(raw)
+        self._json({"ok": True, "url": "/attachments/%s/%s" % (sub, name), "size": len(raw)})
 
     def submit_report(self):
         d = self._body()

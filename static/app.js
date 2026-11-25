@@ -8,9 +8,11 @@ const STATUS = {
   paused:  { label: '暂停',   color: '#f59e0b', soft: '#fdf3e3' },
   review:  { label: '待验收', color: '#8b5cf6', soft: '#f2ecfe' },
   blocked: { label: '阻塞',   color: '#ef4444', soft: '#feeceb' },
-  done:    { label: '已完成', color: '#10b981', soft: '#e8f8f2' }
+  done:    { label: '已完成', color: '#10b981', soft: '#e8f8f2' },
+  cancelled: { label: '已取消', color: '#64748b', soft: '#eef1f6' }
 };
-const ORDER = ['todo', 'doing', 'paused', 'review', 'blocked', 'done'];
+const ORDER = ['todo', 'doing', 'paused', 'review', 'blocked', 'done', 'cancelled'];
+const CLOSED = { done: 1, cancelled: 1 };   // 结束态：不再提醒、不算逾期
 const PRIO = { P0: '#ef4444', P1: '#f59e0b', P2: '#94a3b8' };
 const PRIO_LABEL = { P0: '高', P1: '中', P2: '低' };
 
@@ -39,7 +41,8 @@ const S = {
   reportWeek: null,
   reportData: null,
   reportMd: '',
-  reportMdWeek: ''
+  reportMdWeek: '',
+  pendingImgs: []
 };
 const FIELD_CN = {
   title: '标题', detail: '说明', member_id: '负责人', status: '状态', priority: '优先级',
@@ -55,7 +58,7 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ 
 function fmt(s) { return s ? s.slice(5, 10).replace('-', '/') : '—'; }
 function fmtFull(s) { return s ? s.slice(0, 16).replace('T', ' ').replace(/-/g, '/') : ''; }
 function todayD() { return parse(S.today); }
-function isOverdue(t) { return t.status !== 'done' && t.status !== 'paused' && t.due_date && t.due_date < S.today; }
+function isOverdue(t) { return !CLOSED[t.status] && t.status !== 'paused' && t.due_date && t.due_date < S.today; }
 function daysLeft(t) { return t.due_date ? diffDays(todayD(), parse(t.due_date)) : null; }
 function initials(name) { return (name || '?').slice(-2); }
 function memberById(id) { return S.data.members.find(m => m.id === id) || null; }
@@ -375,7 +378,7 @@ function buildReminders() {
   };
   // 每个事务只保留最高优先级的一条提醒，避免同一件事在列表里重复出现
   S.data.tasks.forEach(t => {
-    if (t.status === 'done' || t.status === 'paused') return;
+    if (CLOSED[t.status] || t.status === 'paused') return;
     const n = daysLeft(t);
     if (isOverdue(t)) { push('overdue', t, '已逾期 ' + (-n) + ' 天，进度 ' + t.progress + '%'); return; }
     if (t.status === 'blocked') { push('blocked', t, '阻塞中，需要外部条件解除'); return; }
@@ -639,8 +642,8 @@ function viewPlan() {
   if (f.q) { const q = f.q.toLowerCase(); tasks = tasks.filter(t => (t.title + ' ' + (t.detail || '')).toLowerCase().includes(q)); }
   if (f.overdueOnly) tasks = tasks.filter(isOverdue);
   // 未完成优先：先按截止日期从早到晚（逾期的自然在最前），没排期的排在其后；已完成的沉到底部
-  const planKey = t => (t.status === 'done' ? 1 : 0);
-  const planDue = t => (t.due_date ? (t.status === 'done' ? t.done_at || t.due_date : t.due_date) : '9999');
+  const planKey = t => (CLOSED[t.status] ? 1 : 0);
+  const planDue = t => (t.due_date ? (CLOSED[t.status] ? t.done_at || t.due_date : t.due_date) : '9999');
   tasks.sort((a, b) => {
     const ka = planKey(a), kb = planKey(b);
     if (ka !== kb) return ka - kb;
@@ -677,8 +680,8 @@ function viewPlan() {
       '<td><div class="pbar"><div class="bar"><i style="width:' + t.progress + '%;background:' + st.color + '"></i></div><span class="mono">' + t.progress + '%</span></div></td>' +
       '<td class="muted mono">' + fmt(t.start_date) + '</td>' +
       '<td class="mono">' + (t.due_date ?
-        fmt(t.due_date) + '<div style="font-size:10.5px;color:' + (t.status !== 'done' && t.status !== 'paused' && daysLeft(t) < 0 ? '#b91c1c' : '#9aa1b2') + '">' +
-        (t.status === 'done' ? '已完成' : t.status === 'paused' ? '暂停中' : daysLeft(t) < 0 ? '逾期 ' + (-daysLeft(t)) + ' 天' : daysLeft(t) === 0 ? '今天到期' : '剩 ' + daysLeft(t) + ' 天') + '</div>'
+        fmt(t.due_date) + '<div style="font-size:10.5px;color:' + (!CLOSED[t.status] && t.status !== 'paused' && daysLeft(t) < 0 ? '#b91c1c' : '#9aa1b2') + '">' +
+        (t.status === 'done' ? '已完成' : t.status === 'cancelled' ? '已取消' : t.status === 'paused' ? '暂停中' : daysLeft(t) < 0 ? '逾期 ' + (-daysLeft(t)) + ' 天' : daysLeft(t) === 0 ? '今天到期' : '剩 ' + daysLeft(t) + ' 天') + '</div>'
         : '<span class="muted">未排期</span>') + '</td>' +
       '<td class="muted mono">' + (t.estimate ? t.estimate + 'h' : '—') + '</td></tr>';
   });
@@ -689,13 +692,20 @@ function viewPlan() {
 /* ------------------------------------------------------------ 时间线 */
 function viewTimeline() {
   const dated = S.data.tasks.filter(t => t.start_date || t.due_date);
-  const doneCount = dated.filter(t => t.status === 'done').length;
-  // 默认不显示已完成，勾选后才参与绘制（也不参与时间轴范围计算）
-  const tasks = S.tlDone ? dated.slice() : dated.filter(t => t.status !== 'done');
+  const closedCount = dated.filter(t => CLOSED[t.status]).length;
+  // 默认只隐藏「早就结束」的：本周完成/取消的仍然显示，否则看不到这周收了什么
+  const weekStart = weekOf(S.today);
+  const closedThisWeek = t => {
+    if (!CLOSED[t.status]) return false;
+    const ts = String(t.done_at || t.updated_at || '').slice(0, 10);
+    return ts && ts >= weekStart && ts <= S.today;
+  };
+  const hiddenCount = dated.filter(t => CLOSED[t.status] && !closedThisWeek(t)).length;
+  const tasks = S.tlDone ? dated.slice() : dated.filter(t => !CLOSED[t.status] || closedThisWeek(t));
   if (!tasks.length) {
     return '<div class="empty">还没有可排期的事务' +
-      (!S.tlDone && doneCount ? '（已有 ' + doneCount + ' 项已完成，勾选下方「显示已完成」可查看）' : '') + '</div>' +
-      tlDoneToggle(doneCount);
+      (!S.tlDone && closedCount ? '（已有 ' + closedCount + ' 项已完成或已取消，勾选下方「显示已完成 / 已取消」可查看）' : '') + '</div>' +
+      tlDoneToggle(closedCount, hiddenCount);
   }
   const tD = parse(S.today);
   let minD = S.today, maxD = S.today;
@@ -804,7 +814,7 @@ function viewTimeline() {
       const x1 = xOf(s) + 1, x2 = xOf(e) + (e <= nearEnd ? nearPx : farPx) - 1;
       const st = STATUS[t.status];
       const wPx = Math.max(6, Math.min(x2 - x1, width - x1 - 1));
-      h += '<div class="gbar' + (t.status === 'done' ? ' done' : '') + (wPx < 52 ? ' tiny' : '') + (x2 - x1 > wPx + 1 ? ' clipped' : '') + '" data-task="' + t.id + '" title="' + esc(t.title + ' · ' + fmt(s) + ' ~ ' + fmt(e) + ' · ' + t.progress + '%') + '" ' +
+      h += '<div class="gbar st-' + t.status + (t.status === 'done' ? ' done' : '') + (t.status === 'cancelled' ? ' cancelled' : '') + (wPx < 52 ? ' tiny' : '') + (x2 - x1 > wPx + 1 ? ' clipped' : '') + '" data-task="' + t.id + '" title="' + esc(t.title + ' · ' + fmt(s) + ' ~ ' + fmt(e) + ' · ' + t.progress + '%') + '" ' +
         'style="left:' + x1 + 'px;width:' + wPx + 'px;top:' + (8 + i * 26) + 'px;position:absolute;background:' + st.color + ';--prog:' + t.progress + '%">' +
         '<span class="lbl">' + esc(t.title) + '</span></div>';
     });
@@ -817,15 +827,15 @@ function viewTimeline() {
   h += '</div></div>';
 
   h += '<div class="tl-legend">' + ORDER.map(s => '<span><i style="background:' + STATUS[s].color + '"></i>' + STATUS[s].label + '</span>').join('') +
-    '<span><i style="background:#4f46e5"></i>今天</span>' + tlDoneToggle(doneCount) +
+    '<span><i style="background:#4f46e5"></i>今天</span>' + tlDoneToggle(closedCount, hiddenCount) +
     (hasFar ? '<span class="muted">左侧按天到 ' + fmt(nearEnd) + '，之后按月压缩（虚线处断开）</span>' : '') +
     '</div>';
   return h;
 }
 
-function tlDoneToggle(n) {
-  return '<label class="tl-done-toggle"><input type="checkbox" data-tl-done' + (S.tlDone ? ' checked' : '') + '> 显示已完成' +
-    (n ? '<span class="n">' + n + '</span>' : '') + '</label>';
+function tlDoneToggle(n, hidden) {
+  return '<label class="tl-done-toggle" title="本周完成或取消的始终显示"><input type="checkbox" data-tl-done' + (S.tlDone ? ' checked' : '') + '> 显示已完成 / 已取消' +
+    (n ? '<span class="n">' + (S.tlDone ? n : (hidden || n)) + '</span>' : '') + '</label>';
 }
 
 /* ------------------------------------------------------------ KPI */
@@ -1132,6 +1142,59 @@ function resizeImage(file, size) {
   });
 }
 
+function imageToDataUrl(file, maxW, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, (maxW || 1600) / img.width);
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality || 0.88));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('图片无法读取')); };
+    img.src = url;
+  });
+}
+
+function updImages(u) {
+  if (!u || !u.images) return [];
+  try { const a = JSON.parse(u.images); return Array.isArray(a) ? a : []; } catch (_) { return []; }
+}
+
+function renderUpdThumbs() {
+  const box = document.getElementById('upd-thumbs');
+  if (!box) return;
+  const list = S.pendingImgs || [];
+  box.innerHTML = list.map((im, i) =>
+    '<span class="thumb"><img src="' + esc(im.url) + '" alt=""><button type="button" data-thumb-del="' + i + '" title="移除">✕</button></span>').join('');
+  box.style.display = list.length ? 'flex' : 'none';
+}
+
+async function onPasteImages(e) {
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  const files = [];
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].kind === 'file' && /^image\//.test(items[i].type)) {
+      const f = items[i].getAsFile();
+      if (f) files.push(f);
+    }
+  }
+  if (!files.length) return;
+  e.preventDefault();
+  for (const f of files) {
+    try {
+      const data = await imageToDataUrl(f, 1600, 0.88);
+      const j = await api('/api/upload', 'POST', { data });
+      S.pendingImgs.push({ url: j.url });
+      renderUpdThumbs();
+    } catch (err) { toast(err.message || '图片上传失败', true); }
+  }
+}
+
 function pickAvatar(mid) {
   const inp = document.createElement('input');
   inp.type = 'file';
@@ -1182,16 +1245,20 @@ function renderDrawer() {
     (t ? '<div class="section-title" style="margin-top:22px">进展记录<span class="count">' + taskUpdates(t.id).length + '</span></div>' +
       '<div class="updates">' + (taskUpdates(t.id).map(u => {
         const m = memberById(u.member_id);
+        const pics = updImages(u).map(src => '<a class="upd-img" href="' + esc(src) + '" target="_blank" rel="noopener"><img src="' + esc(src) + '" alt="进展图片" loading="lazy"></a>').join('');
         return '<div class="upd">' + avatar(m, 'sm') + '<div class="body"><div class="txt' + (u.kind === 'system' ? ' sys' : '') + '">' + esc(u.content) + '</div>' +
+          (pics ? '<div class="upd-pics">' + pics + '</div>' : '') +
           '<div class="when">' + esc((m ? m.name : '') + ' · ' + fmtFull(u.created_at)) + '</div></div></div>';
       }).join('') || '<div class="muted" style="font-size:12px;padding:8px 0">还没有进展记录</div>') + '</div>' +
-      '<div class="upd-input"><textarea id="f-upd" placeholder="记录一条进展（Ctrl + Enter 提交）"></textarea><button class="btn" id="btn-add-upd">添加</button></div>' +
-      '<div class="muted" style="font-size:11px;margin-top:6px">将以 <b>' + esc(S.me ? S.me.name : '未识别身份') + '</b> 的身份记录' + (S.me ? '（' + esc(S.ip) + '）' : '') + '</div>' +
+      '<div class="upd-input"><textarea id="f-upd" placeholder="记录一条进展（Ctrl + Enter 提交，可直接粘贴截图）"></textarea><button class="btn" id="btn-add-upd">添加</button></div>' +
+      '<div class="upd-thumbs" id="upd-thumbs" style="display:none"></div>' +
+      '<div class="muted" style="font-size:11px;margin-top:6px">将以 <b>' + esc(S.me ? S.me.name : '未识别身份') + '</b> 的身份记录' + (S.me ? '（' + esc(S.ip) + '）' : '') + '；截图可直接 Ctrl+V 粘贴，随进展一起提交</div>' +
       taskLogsHtml(t.id) : '') +
     '</div>' +
     '<div class="drawer-foot">' +
     '<button class="btn primary" id="btn-save">' + (isNew ? '创建事务' : '保存修改') + '</button>' +
     (t ? '<button class="btn" id="btn-done">' + (t.status === 'done' ? '重新打开' : '标记完成') + '</button>' : '') +
+    (t && t.status !== 'cancelled' ? '<button class="btn ghost" id="btn-cancel">取消事务</button>' : '') +
     '<span class="spacer"></span>' +
     (t ? '<button class="btn danger sm" id="btn-del">删除</button>' : '') +
     '</div>';
@@ -1203,9 +1270,18 @@ function renderDrawer() {
   if (t) {
     document.getElementById('btn-add-upd').addEventListener('click', addUpdate);
     document.getElementById('f-upd').addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') addUpdate(); });
+    document.getElementById('f-upd').addEventListener('paste', onPasteImages);
+    renderUpdThumbs();
     document.getElementById('btn-done').addEventListener('click', async () => {
       await act(() => api('/api/tasks/' + t.id, 'PATCH', { status: t.status === 'done' ? 'doing' : 'done' }), t.status === 'done' ? '已重新打开' : '已标记完成');
       S.openTask = null;
+    });
+    const btnCancel = document.getElementById('btn-cancel');
+    if (btnCancel) btnCancel.addEventListener('click', async () => {
+      if (!confirm('取消「' + t.title + '」？会保留记录，只是不再计入进行中和提醒。')) return;
+      await act(() => api('/api/tasks/' + t.id, 'PATCH', { status: 'cancelled' }), '已取消');
+      S.openTask = null;
+      closeDrawer();
     });
     document.getElementById('btn-del').addEventListener('click', async () => {
       if (!confirm('确定删除「' + t.title + '」？进展记录也会一并删除。')) return;
@@ -1240,6 +1316,7 @@ async function saveTask() {
   // 进展框里还有没提交的文字，保存时一并存进去，避免漏记
   const noteEl = document.getElementById('f-upd');
   const pendingNote = noteEl ? noteEl.value.trim() : '';
+  const pendingImgs = (S.pendingImgs || []).map(x => x.url);
   try {
     if (S.openTask === 'new') {
       const j = await api('/api/tasks', 'POST', p);
@@ -1249,13 +1326,14 @@ async function saveTask() {
       toast('事务已创建');
     } else {
       const tid = S.openTask;
-      if (pendingNote) {
-        await api('/api/tasks/' + tid + '/updates', 'POST', { content: pendingNote });
+      if (pendingNote || pendingImgs.length) {
+        await api('/api/tasks/' + tid + '/updates', 'POST', { content: pendingNote, images: pendingImgs });
         if (noteEl) noteEl.value = '';
+        S.pendingImgs = [];
       }
       await api('/api/tasks/' + tid, 'PATCH', p);
       await reload();
-      toast(pendingNote ? '已保存，进展也已记录' : '已保存');
+      toast(pendingNote || pendingImgs.length ? '已保存，进展也已记录' : '已保存');
     }
   } catch (e) { toast(e.message, true); }
   finally { btn.disabled = false; }
@@ -1263,13 +1341,16 @@ async function saveTask() {
 
 async function addUpdate() {
   const el = document.getElementById('f-upd');
+  if (!el) return;
   const txt = el.value.trim();
-  if (!txt) return;
+  const imgs = (S.pendingImgs || []).map(x => x.url);
+  if (!txt && !imgs.length) return;
   try {
-    await api('/api/tasks/' + S.openTask + '/updates', 'POST', { content: txt });
+    await api('/api/tasks/' + S.openTask + '/updates', 'POST', { content: txt, images: imgs });
     el.value = '';
+    S.pendingImgs = [];
     await reload();
-    toast('进展已记录');
+    toast(imgs.length ? '进展已记录（含 ' + imgs.length + ' 张图片）' : '进展已记录');
   } catch (e) { toast(e.message, true); }
 }
 
@@ -1279,12 +1360,14 @@ async function act(fn, okMsg) {
 }
 
 function openTask(id, status) {
+  S.pendingImgs = [];
   S.openTask = id;
   S.pendingStatus = status || null;
   renderDrawer();
 }
 function closeDrawer() {
   S.openTask = null;
+  S.pendingImgs = [];
   document.getElementById('drawer').classList.remove('show');
   document.getElementById('overlay').classList.remove('show');
 }
@@ -1494,6 +1577,11 @@ document.addEventListener('click', async e => {
     if (!S.reportMd) return toast('周报还在生成，稍后再试', true);
     try { await navigator.clipboard.writeText(S.reportMd); toast('已复制到剪贴板'); }
     catch (_) { toast('复制失败，请手动选择文本', true); }
+    return;
+  }
+  if (e.target.dataset && e.target.dataset.thumbDel !== undefined) {
+    S.pendingImgs.splice(Number(e.target.dataset.thumbDel), 1);
+    renderUpdThumbs();
     return;
   }
   if (e.target.id === 'btn-dl-report') {
