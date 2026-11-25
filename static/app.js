@@ -624,8 +624,9 @@ function viewKanban() {
   ORDER.forEach(st => {
     const list = sortCards(tasks.filter(t => t.status === st));
     const meta = STATUS[st];
-    h += '<div class="col" data-status="' + st + '"><div class="col-head"><span class="dot" style="background:' + meta.color + '"></span>' +
-      meta.label + '<span class="n">' + list.length + '</span></div><div class="col-body">';
+    h += '<div class="col' + (list.length ? '' : ' empty') + '" data-status="' + st + '"><div class="col-head"><span class="dot" style="background:' + meta.color + '"></span>' +
+      meta.label + '<span class="n">' + list.length + '</span></div><div class="col-body">' +
+      (list.length ? '' : '<div class="col-empty">暂无事务<br>拖进来或点下面新建</div>');
     list.forEach(t => {
       const m = memberById(t.member_id);
       const lu = lastUpdate(t.id);

@@ -290,11 +290,17 @@ body.guest .kcard { cursor: default; }
 .kanban-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
 .kanban {
   display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 10px; align-items: stretch;
+  gap: 10px; align-items: start;
   overflow-x: auto; padding-bottom: 8px;
 }
-.col { background: #eff1f6; border-radius: 12px; padding: 10px; min-height: 140px; display: flex; flex-direction: column; transition: background .15s, box-shadow .15s; }
+/* 列高随内容走：空列/少卡片的列不再跟最高的列拉齐，省掉大片空白 */
+.col { background: #eff1f6; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; transition: background .15s, box-shadow .15s, padding .15s; }
+.col.empty { padding: 10px 10px 6px; }
+.col.empty .col-head { padding-bottom: 6px; }
+.col.empty .col-body { min-height: 0; }
+.col-empty { border: 1px dashed #cfd4e2; border-radius: 9px; padding: 14px 8px; text-align: center; color: #9aa1b2; font-size: 11.5px; line-height: 1.5; }
 .col.over { background: #e6e9f5; box-shadow: inset 0 0 0 2px #c7cdf0; }
+.col.over .col-empty, .col.dragging-over .col-empty { padding: 26px 8px; }
 .col-head { display: flex; align-items: center; gap: 7px; padding: 2px 4px 10px; font-size: 12.5px; font-weight: 700; color: #4b5266; }
 .col-head .n { color: var(--muted); font-weight: 600; background: #fff; border-radius: 10px; padding: 0 6px; font-size: 11px; }
 .col-head .dot { width: 7px; height: 7px; border-radius: 50%; }
@@ -313,7 +319,7 @@ body.guest .kcard { cursor: default; }
 .kcard .foot .right { margin-left: auto; display: flex; align-items: center; gap: 5px; }
 .kcard .mini { height: 3px; border-radius: 2px; background: #eef0f6; margin-top: 8px; overflow: hidden; }
 .kcard .mini > i { display: block; height: 100%; border-radius: 2px; }
-.col-add { margin-top: auto; border: 0; background: transparent; color: #8a91a3; font-size: 12px; text-align: left; padding: 6px 6px 2px; border-radius: 7px; width: 100%; }
+.col-add { margin-top: 8px; border: 0; background: transparent; color: #8a91a3; font-size: 12px; text-align: left; padding: 6px 6px 2px; border-radius: 7px; width: 100%; }
 .col-add:hover { background: #e4e7f0; color: #4b5266; }
 
 /* ---------------- table / plan ---------------- */
