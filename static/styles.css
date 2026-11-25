@@ -289,7 +289,7 @@ body.guest .kcard { cursor: default; }
 /* ---------------- kanban ---------------- */
 .kanban-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
 .kanban {
-  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  display: grid; grid-template-columns: repeat(var(--cols, 7), minmax(0, 1fr));
   gap: 10px; align-items: start;
   overflow-x: auto; padding-bottom: 8px;
 }
@@ -298,9 +298,13 @@ body.guest .kcard { cursor: default; }
 .col.empty { padding: 10px 10px 6px; }
 .col.empty .col-head { padding-bottom: 6px; }
 .col.empty .col-body { min-height: 0; }
+.kanban.stacked { grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)) 214px; }
+.col-stack { display: flex; flex-direction: column; gap: 8px; }
 .col-empty { border: 1px dashed #cfd4e2; border-radius: 9px; padding: 14px 8px; text-align: center; color: #9aa1b2; font-size: 11.5px; line-height: 1.5; }
 .col.over { background: #e6e9f5; box-shadow: inset 0 0 0 2px #c7cdf0; }
-.col.over .col-empty, .col.dragging-over .col-empty { padding: 26px 8px; }
+.col.over .col-empty, .col.dragging-over .kanban.stacked { grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)) 214px; }
+.col-stack { display: flex; flex-direction: column; gap: 8px; }
+.col-empty { padding: 26px 8px; }
 .col-head { display: flex; align-items: center; gap: 7px; padding: 2px 4px 10px; font-size: 12.5px; font-weight: 700; color: #4b5266; }
 .col-head .n { color: var(--muted); font-weight: 600; background: #fff; border-radius: 10px; padding: 0 6px; font-size: 11px; }
 .col-head .dot { width: 7px; height: 7px; border-radius: 50%; }
@@ -594,14 +598,16 @@ input.bad { border-color: #e5484d !important; box-shadow: 0 0 0 3px rgba(229, 72
 /* 宽屏：内容铺满，多栏承载更多信息 */
 
 @media (max-width: 1400px) {
-  .kanban { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .kanban { grid-template-columns: repeat(var(--cols, 7), minmax(0, 1fr)); }
+  .kanban.stacked { grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)) 200px; }
   .kanban .kcard .t { font-size: 12px; }
 }
 
 @media (max-width: 1180px) {
   .stat-row { grid-template-columns: repeat(2, 1fr); }
   .grid-2 { grid-template-columns: 1fr; }
-  .kanban { grid-template-columns: repeat(7, 186px); }
+  .kanban { grid-template-columns: repeat(var(--cols, 7), 186px); }
+  .kanban.stacked { grid-template-columns: repeat(var(--cols, 4), 186px) 200px; }
 }
 @media (max-width: 900px) {
   .sidebar { display: none; }

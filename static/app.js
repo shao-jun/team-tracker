@@ -50,6 +50,17 @@ const FIELD_CN = {
 };
 
 /* ------------------------------------------------------------ utils */
+function saveView() {
+  try { localStorage.setItem('tt.lastview' + (S.me ? '.' + S.me.id : ''), S.view); } catch (_) {}
+}
+function readView() {
+  try {
+    const mine = S.me ? localStorage.getItem('tt.lastview.' + S.me.id) : null;
+    const v = mine || localStorage.getItem('tt.lastview') || '';
+    return VIEWS.some(x => x.id === v) ? v : '';
+  } catch (_) { return ''; }
+}
+
 function iso(dt) { const p = n => String(n).padStart(2, '0'); return dt.getFullYear() + '-' + p(dt.getMonth() + 1) + '-' + p(dt.getDate()); }
 function parse(s) { return s ? new Date(s.slice(0, 10) + 'T00:00:00') : null; }
 function addDays(s, n) { const d = parse(s) || new Date(); d.setDate(d.getDate() + n); return iso(d); }
@@ -608,7 +619,6 @@ function viewKanban() {
   h += '<input type="search" placeholder="搜索事务标题 / 描述" value="' + esc(f.q) + '" data-filter="q" style="width:240px">';
   h += '<span class="muted" style="font-size:12px">共 ' + tasks.length + ' 项 · 卡片可拖到其他列</span></div>';
 
-  h += '<div class="kanban">';
   // 列内排序：优先级高→低，再按剩余天数从少到多，没排期的排最后
   const PRIO_RANK = { P0: 0, P1: 1, P2: 2 };
   const sortCards = list => list.slice().sort((a, b) => {
@@ -621,16 +631,16 @@ function viewKanban() {
     return a.id - b.id;
   });
 
-  ORDER.forEach(st => {
-    const list = sortCards(tasks.filter(t => t.status === st));
+  const colHtml = (st, list, compact) => {
     const meta = STATUS[st];
-    h += '<div class="col' + (list.length ? '' : ' empty') + '" data-status="' + st + '"><div class="col-head"><span class="dot" style="background:' + meta.color + '"></span>' +
+    let c = '<div class="col' + (list.length ? '' : ' empty') + '" data-status="' + st + '">' +
+      '<div class="col-head"><span class="dot" style="background:' + meta.color + '"></span>' +
       meta.label + '<span class="n">' + list.length + '</span></div><div class="col-body">' +
-      (list.length ? '' : '<div class="col-empty">暂无事务<br>拖进来或点下面新建</div>');
+      (list.length ? '' : '<div class="col-empty">暂无事务' + (compact ? '' : '<br>拖进来或点下面新建') + '</div>');
     list.forEach(t => {
       const m = memberById(t.member_id);
       const lu = lastUpdate(t.id);
-      h += '<div class="kcard" draggable="true" data-task="' + t.id + '">' +
+      c += '<div class="kcard" draggable="true" data-task="' + t.id + '">' +
         '<div class="ttl">' + esc(t.title) + '</div>' +
         '<div class="tags"><span class="chip ' + t.priority.toLowerCase() + '">' + (PRIO_LABEL[t.priority] || t.priority) + '</span>' +
         '<span class="chip cat">' + esc(t.category) + '</span>' +
@@ -641,9 +651,21 @@ function viewKanban() {
         (lu ? '<div style="font-size:10.5px;color:#9aa1b2;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(lu.content) + '</div>' : '') +
         '</div>';
     });
-    h += '<button class="col-add" data-new="' + st + '">＋ 添加事务</button>';
-    h += '</div></div>';
+    c += '<button class="col-add" data-new="' + st + '">＋ 添加事务</button>';
+    return c + '</div></div>';
+  };
+
+  // 有卡片的列正常铺开；空列竖着摞成一列窄条，把宽度让给有内容的列
+  const filled = [], blanks = [];
+  ORDER.forEach(st => {
+    const list = sortCards(tasks.filter(t => t.status === st));
+    (list.length ? filled : blanks).push({ st: st, list: list });
   });
+  h += '<div class="kanban' + (blanks.length ? ' stacked' : '') + '" style="--cols:' + Math.max(1, filled.length) + '">';
+  filled.forEach(c => { h += colHtml(c.st, c.list, false); });
+  if (blanks.length) {
+    h += '<div class="col-stack">' + blanks.map(c => colHtml(c.st, c.list, true)).join('') + '</div>';
+  }
   h += '</div>';
   return h;
 }
@@ -1454,16 +1476,16 @@ function kpiModal(memberId) {
 /* ------------------------------------------------------------ events */
 document.addEventListener('click', async e => {
   const nav = e.target.closest('[data-view]');
-  if (nav) { S.view = nav.dataset.view; render(); window.scrollTo(0, 0); return; }
+  if (nav) { S.view = nav.dataset.view; saveView(); render(); window.scrollTo(0, 0); return; }
   const jump = e.target.closest('[data-view-jump]');
-  if (jump) { S.view = jump.dataset.viewJump; render(); return; }
+  if (jump) { S.view = jump.dataset.viewJump; saveView(); render(); return; }
 
   // 成员卡：点人 → 看板 + 按该成员过滤（点卡里的具体事务仍然先打开抽屉）
   const mjump = e.target.closest('[data-jump-member]');
   if (mjump && !e.target.closest('[data-task]')) {
     S.filter.member = mjump.dataset.jumpMember;
     S.filter.status = '';
-    S.view = 'kanban';
+    S.view = 'kanban'; saveView();
     render();
     window.scrollTo(0, 0);
     return;
@@ -1681,7 +1703,11 @@ document.getElementById('btn-new').addEventListener('click', () => openTask('new
   document.getElementById('view').innerHTML = '<div class="empty">正在加载…</div>';
   try {
     await load();
+    const saved = readView();
+    if (saved) S.view = saved;
     await loadIdentity();
+    const mine = readView();
+    if (mine && mine !== S.view) S.view = mine;
     render();
     if (!S.me && !S.guest) showIdentityModal(true);
     else recordVisit();
